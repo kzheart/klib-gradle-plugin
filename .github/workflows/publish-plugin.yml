@@ -1,0 +1,93 @@
+name: Publish Gradle Plugin
+
+on:
+  push:
+    tags:
+      - "gradle-plugin-v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag to publish, for example gradle-plugin-v0.2.0"
+        required: true
+        type: string
+      confirm:
+        description: "Type publish to confirm the public Plugin Portal release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-gradle-plugin-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: plugin-portal
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify release inputs and credentials
+        shell: bash
+        env:
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+        run: |
+          set -euo pipefail
+          plugin_version="$(sed -n 's/^pluginVersion=//p' gradle.properties)"
+          test -n "$plugin_version"
+          case "$plugin_version" in
+            *SNAPSHOT*) echo "pluginVersion must not be a SNAPSHOT" >&2; exit 1 ;;
+          esac
+          expected_tag="gradle-plugin-v${plugin_version}"
+          test "$RELEASE_TAG" = "$expected_tag" || {
+            echo "Release tag must be $expected_tag" >&2
+            exit 1
+          }
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            test "$RELEASE_CONFIRMATION" = "publish" || {
+              echo "Manual publication requires the exact confirmation: publish" >&2
+              exit 1
+            }
+          fi
+          test -n "${GRADLE_PUBLISH_KEY:-}" || {
+            echo "GRADLE_PUBLISH_KEY is not configured" >&2
+            exit 1
+          }
+          test -n "${GRADLE_PUBLISH_SECRET:-}" || {
+            echo "GRADLE_PUBLISH_SECRET is not configured" >&2
+            exit 1
+          }
+          git tag --points-at HEAD | grep -Fx "$expected_tag" >/dev/null || {
+            echo "Tag $expected_tag does not point at the checked-out commit" >&2
+            exit 1
+          }
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check release source
+        run: ./gradlew check validateGradlePluginPortal --no-configuration-cache
+
+      - name: Publish plugin
+        env:
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+          PLUGIN_PORTAL_PUBLICATION_APPROVED: "true"
+        run: >-
+          ./gradlew publishPlugins
+          --no-validate-only
+          -PreleaseTag="$RELEASE_TAG"
+          --no-configuration-cache

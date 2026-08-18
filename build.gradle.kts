@@ -147,18 +147,32 @@ val releaseTag = providers.gradleProperty("releaseTag")
     .orElse("")
 val portalApproved = providers.gradleProperty("pluginPortalPublicationApproved")
     .orElse(providers.environmentVariable("PLUGIN_PORTAL_PUBLICATION_APPROVED"))
-val portalKey = providers.environmentVariable("GRADLE_PUBLISH_KEY")
-val portalSecret = providers.environmentVariable("GRADLE_PUBLISH_SECRET")
+val portalKey = providers.gradleProperty("gradle.publish.key")
+    .orElse(providers.environmentVariable("GRADLE_PUBLISH_KEY"))
+val portalSecret = providers.gradleProperty("gradle.publish.secret")
+    .orElse(providers.environmentVariable("GRADLE_PUBLISH_SECRET"))
+val publishPluginsTask = tasks.named<PublishTask>("publishPlugins")
+val pluginPortalValidateOnly = publishPluginsTask.flatMap { it.validateOnly }.orElse(false)
 
-tasks.named<PublishTask>("publishPlugins") {
-    dependsOn("validateGradlePluginPortal")
-    doFirst {
-        if (validateOnly.get()) {
-            logger.lifecycle("Plugin Portal validate-only mode: no version will be published.")
-            return@doFirst
+val verifyPluginPortalRelease = tasks.register("verifyPluginPortalRelease") {
+    group = "publishing"
+    description = "Fails locally before a Plugin Portal validation or publication can start."
+    inputs.property("validateOnly", pluginPortalValidateOnly)
+    doLast {
+        if (!portalKey.isPresent || !portalSecret.isPresent) {
+            throw GradleException(
+                "GRADLE_PUBLISH_KEY and GRADLE_PUBLISH_SECRET are required for Plugin Portal access.")
+        }
+        if (pluginPortalValidateOnly.get()) {
+            logger.lifecycle("Plugin Portal validate-only gate passed; no version will be published.")
+            return@doLast
+        }
+        if (!semanticVersion.matches(pluginVersion) || pluginVersion.contains("SNAPSHOT", true)) {
+            throw GradleException(
+                "Plugin Portal publication requires a non-SNAPSHOT semantic pluginVersion.")
         }
 
-        val expectedTag = "v$pluginVersion"
+        val expectedTag = "gradle-plugin-v$pluginVersion"
         val actualTag = releaseTag.get().trim()
         if (actualTag != expectedTag) {
             throw GradleException(
@@ -169,9 +183,31 @@ tasks.named<PublishTask>("publishPlugins") {
             throw GradleException(
                 "Set PLUGIN_PORTAL_PUBLICATION_APPROVED=true to confirm a public release.")
         }
-        if (!portalKey.isPresent || !portalSecret.isPresent) {
-            throw GradleException(
-                "GRADLE_PUBLISH_KEY and GRADLE_PUBLISH_SECRET are required for publication.")
+
+        fun git(vararg arguments: String): String {
+            val process = ProcessBuilder(
+                listOf("git", "-C", rootProject.projectDir.absolutePath) + arguments)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            if (process.waitFor() != 0) {
+                throw GradleException("Could not verify the release checkout: $output")
+            }
+            return output
+        }
+        val headTags = git("tag", "--points-at", "HEAD")
+            .lineSequence()
+            .filter(String::isNotBlank)
+            .toSet()
+        if (expectedTag !in headTags) {
+            throw GradleException("Release tag $expectedTag does not point at the checked-out HEAD.")
+        }
+        if (git("status", "--porcelain", "--untracked-files=all").isNotEmpty()) {
+            throw GradleException("Plugin Portal publication requires a clean release checkout.")
         }
     }
+}
+
+publishPluginsTask.configure {
+    dependsOn("validateGradlePluginPortal", verifyPluginPortalRelease)
 }

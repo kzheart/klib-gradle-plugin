@@ -115,12 +115,26 @@ export GRADLE_PUBLISH_SECRET='<portal-api-secret>'
 ./gradlew publishPlugins --validate-only --no-configuration-cache
 ```
 
-For a real `0.2.0` publication, create a `v0.2.0` tag, check it out, and run:
+Pushes to `main` and pull requests automatically run `check`, the TestKit suite, and local Plugin
+Portal validation. They never run `publishPlugins`, so an ordinary `main` push cannot republish a
+version.
+
+For a real `0.2.0` publication, create and push the exact `gradle-plugin-v0.2.0` tag. The dedicated
+workflow verifies the tag against `pluginVersion`, rejects SNAPSHOT versions, checks that both
+Portal secrets exist, and only then runs `publishPlugins`:
 
 ```bash
-export PLUGIN_PORTAL_PUBLICATION_APPROVED=true
-./gradlew publishPlugins --no-validate-only -PreleaseTag=v0.2.0 --no-configuration-cache
+git tag gradle-plugin-v0.2.0
+git push origin gradle-plugin-v0.2.0
 ```
+
+The same workflow supports a recovery-only manual dispatch. Select the existing
+`gradle-plugin-v0.2.0` tag and type the exact confirmation `publish`; the workflow checks out that
+tag rather than publishing the selected branch. Configure `GRADLE_PUBLISH_KEY` and
+`GRADLE_PUBLISH_SECRET` as secrets in the `plugin-portal` GitHub environment. Adding an environment
+approval rule provides an additional human gate. The Gradle release gate independently verifies
+the version, tag at `HEAD`, clean checkout, confirmation, and credential presence before the Portal
+upload task can execute.
 
 Never commit Portal credentials. The public source and documentation live at
 [github.com/kzheart/klib-gradle-plugin](https://github.com/kzheart/klib-gradle-plugin).
