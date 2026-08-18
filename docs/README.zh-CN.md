@@ -94,39 +94,3 @@ dependencies {
 ```
 
 部署 `build/libs/<项目>-<版本>-all.jar`，不要部署普通 JAR。
-
-## 维护者验证与发布
-
-本地验证不需要 Plugin Portal 凭据：
-
-```bash
-./gradlew clean check validateGradlePluginPortal --no-configuration-cache
-```
-
-服务端校验需要 Portal API 凭据，但不会发布版本：
-
-```bash
-export GRADLE_PUBLISH_KEY='<portal-api-key>'
-export GRADLE_PUBLISH_SECRET='<portal-api-secret>'
-./gradlew publishPlugins --validate-only --no-configuration-cache
-```
-
-每次推送 `main` 和每个 Pull Request 都会自动运行 `check`、TestKit 测试与本地 Plugin Portal
-校验，但不会调用 `publishPlugins`，因此普通 `main` 推送不会重复发布版本。
-
-正式发布 `0.2.0` 时创建并推送精确的 `gradle-plugin-v0.2.0` 标签。独立发布工作流会先核对标签与
-`pluginVersion`，拒绝 SNAPSHOT，检查两个 Portal secret 是否存在，然后才会运行 `publishPlugins`：
-
-```bash
-git tag gradle-plugin-v0.2.0
-git push origin gradle-plugin-v0.2.0
-```
-
-同一个工作流提供仅用于恢复的手动触发入口：填写已有的 `gradle-plugin-v0.2.0` 标签，并输入精确确认词
-`publish`。工作流会检出这个标签，而不是直接发布界面里选择的分支。把 `GRADLE_PUBLISH_KEY` 和
-`GRADLE_PUBLISH_SECRET` 保存为 `plugin-portal` GitHub Environment 的 secrets；再配置 Environment
-审批规则可以增加一次人工门禁。Gradle 发布门禁还会独立验证版本、`HEAD` 标签、干净工作区、发布确认和
-凭据是否存在，全部通过后 Portal 上传任务才会执行。
-
-不要提交 Portal 凭据。公开源码和文档位于
-[github.com/kzheart/klib-gradle-plugin](https://github.com/kzheart/klib-gradle-plugin)。

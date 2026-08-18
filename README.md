@@ -22,11 +22,6 @@ klib {
 The plugin generates `plugin.yml`, adds the selected Klib `0.2.0` modules from Maven Central,
 resolves their module closure, and builds a relocated `-all.jar` for deployment.
 
-See the [English guide](docs/README.md) for repository setup, the complete DSL, packaging rules,
-and release instructions.
-
-Every push to `main` and every pull request runs the build, TestKit suite, and local Plugin Portal
-validation. Publication is isolated in a separate workflow and only runs for the exact
-`gradle-plugin-v<pluginVersion>` tag or an explicitly confirmed manual dispatch of that tag.
+See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 
 Licensed under the [Apache License 2.0](LICENSE).
