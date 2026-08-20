@@ -51,7 +51,6 @@ public final class KlibPlugin implements Plugin<Project> {
                     configuration.setCanBeResolved(false);
                     configuration.setDescription(
                             "Dependencies explicitly embedded in the final Klib JAR.");
-                    excludeHostProvided(configuration);
                 });
         Configuration embeddedClasspath = project.getConfigurations().create(
                 "klibEmbeddedClasspath",

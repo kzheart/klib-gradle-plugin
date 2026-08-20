@@ -33,6 +33,9 @@ class GuardProductModeTest {
     @BeforeEach
     void publishGuardCompileContract() throws Exception {
         repository = Files.createDirectories(projectDirectory.resolve("repository"));
+        publishMarkerDependency("org.spigotmc", "spigot-api", "1.0.0");
+        publishMarkerDependency("com.google.code.gson", "gson", "1.0.0");
+        publishMarkerDependency("org.xerial", "sqlite-jdbc", "1.0.0");
 
         Path coreJar = publishClassModule(
                 "klib-core",
@@ -165,6 +168,9 @@ class GuardProductModeTest {
             assertNotNull(jar.getEntry(
                     "com/example/libs/klib/script/KetherScriptEngine.class"));
             assertNull(jar.getEntry("plugin.yml"));
+            assertNull(jar.getEntry("fixture/spigot-api.marker"));
+            assertNull(jar.getEntry("fixture/gson.marker"));
+            assertNull(jar.getEntry("fixture/sqlite-jdbc.marker"));
             assertFalse(jar.stream().anyMatch(entry ->
                     entry.getName().endsWith("/taboolib/platform/BukkitPlugin.class")));
         }
@@ -276,6 +282,26 @@ class GuardProductModeTest {
             jar.closeEntry();
         }
         return jarPath;
+    }
+
+    private void publishMarkerDependency(String group, String artifact, String version)
+            throws Exception {
+        Path module = repository.resolve(
+                group.replace('.', '/') + "/" + artifact + "/" + version);
+        Files.createDirectories(module);
+        String fileName = artifact + "-" + version;
+        Files.write(module.resolve(fileName + ".pom"), (""
+                + "<project><modelVersion>4.0.0</modelVersion>"
+                + "<groupId>" + group + "</groupId>"
+                + "<artifactId>" + artifact + "</artifactId>"
+                + "<version>" + version + "</version>"
+                + "</project>").getBytes(StandardCharsets.UTF_8));
+        try (ZipOutputStream jar = new ZipOutputStream(
+                Files.newOutputStream(module.resolve(fileName + ".jar")))) {
+            jar.putNextEntry(new ZipEntry("fixture/" + artifact + ".marker"));
+            jar.write(artifact.getBytes(StandardCharsets.UTF_8));
+            jar.closeEntry();
+        }
     }
 
     private static byte[] read(ZipFile jar, ZipEntry entry) throws Exception {
