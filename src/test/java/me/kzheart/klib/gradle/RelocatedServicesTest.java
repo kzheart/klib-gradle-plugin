@@ -36,7 +36,7 @@ class RelocatedServicesTest {
                 + "    targetPackage(\"com.example.fixture\")\n"
                 + "    modules { none() }\n"
                 + "}\n"
-                + "dependencies { implementation(files(\"libs/one.jar\", \"libs/two.jar\")) }\n");
+                + "dependencies { klibEmbedded(files(\"libs/one.jar\", \"libs/two.jar\")) }\n");
 
         BuildResult result = GradleFixture.build(projectDirectory, "shadowJar");
 

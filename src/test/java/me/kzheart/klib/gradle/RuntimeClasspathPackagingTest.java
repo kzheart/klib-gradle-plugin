@@ -22,11 +22,12 @@ class RuntimeClasspathPackagingTest {
     Path projectDirectory;
 
     @Test
-    void packagesImplementationAndRuntimeOnlyButNotCompileOnly() throws Exception {
+    void packagesOnlyExplicitEmbeddedDependencies() throws Exception {
         Path libraries = Files.createDirectories(projectDirectory.resolve("libs"));
         markerJar(libraries.resolve("implementation.jar"), "fixture/implementation.marker");
         markerJar(libraries.resolve("runtime.jar"), "fixture/runtime.marker");
         markerJar(libraries.resolve("compile-only.jar"), "fixture/compile-only.marker");
+        markerJar(libraries.resolve("embedded.jar"), "fixture/embedded.marker");
         GradleFixture.writeProject(projectDirectory, ""
                 + "plugins { id(\"me.kzheart.klib\") }\n"
                 + "version = \"1.0.0\"\n"
@@ -38,16 +39,22 @@ class RuntimeClasspathPackagingTest {
                 + "    implementation(files(\"libs/implementation.jar\"))\n"
                 + "    runtimeOnly(files(\"libs/runtime.jar\"))\n"
                 + "    compileOnly(files(\"libs/compile-only.jar\"))\n"
+                + "    klibEmbedded(files(\"libs/embedded.jar\"))\n"
                 + "}\n");
 
         BuildResult result = GradleFixture.build(projectDirectory, "shadowJar");
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":shadowJar").getOutcome());
         try (ZipFile jar = outputJar()) {
-            assertNotNull(jar.getEntry("fixture/implementation.marker"));
-            assertNotNull(jar.getEntry("fixture/runtime.marker"));
+            assertNull(jar.getEntry("fixture/implementation.marker"));
+            assertNull(jar.getEntry("fixture/runtime.marker"));
             assertNull(jar.getEntry("fixture/compile-only.marker"));
+            assertNotNull(jar.getEntry("fixture/embedded.marker"));
         }
+        String report = new String(Files.readAllBytes(projectDirectory.resolve(
+                "build/reports/klib/bundle-report.txt")), StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertTrue(report.contains("embedded.jar"), report);
+        org.junit.jupiter.api.Assertions.assertFalse(report.contains("implementation.jar"), report);
     }
 
     @Test
@@ -63,7 +70,7 @@ class RuntimeClasspathPackagingTest {
                 + "    modules { none() }\n"
                 + "    relocate(\"com.acme.library\", \"vendor.acme\")\n"
                 + "}\n"
-                + "dependencies { implementation(files(\"libs/external.jar\")) }\n");
+                + "dependencies { klibEmbedded(files(\"libs/external.jar\")) }\n");
 
         BuildResult result = GradleFixture.build(projectDirectory, "shadowJar");
 

@@ -1,8 +1,8 @@
 # Klib Gradle 插件
 
 插件 ID：`me.kzheart.klib`
-插件版本：`0.4.0`
-默认 Klib 库版本：`0.3.0`
+插件版本：`0.5.0`
+默认 Klib 库版本：`0.4.0`
 默认 Guard API 版本：`0.2.0`
 
 插件支持两种互斥产物：普通 Java 8 Bukkit/Paper 插件，以及由 KlibGuard 门户加载的云端商品。
@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.4.0"
+    id("me.kzheart.klib") version "0.5.0"
 }
 
 group = "com.example"
@@ -55,11 +55,13 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.12.2-R0.1-20180712.012057-156") {
         isTransitive = false
     }
+    // 只有明确声明在此配置中的第三方库才会进入最终 JAR。
+    // klibEmbedded("com.example:private-library:1.0.0")
 }
 ```
 
 使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从 Maven Central 自动加入
-`me.kzheart.klib:klib-<module>:0.3.0` 及其模块闭包。
+`me.kzheart.klib:klib-<module>:0.4.0` 及其模块闭包。
 
 ## KlibGuard 云端商品
 
@@ -67,7 +69,7 @@ dependencies {
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.4.0"
+    id("me.kzheart.klib") version "0.5.0"
 }
 
 group = "com.example"
@@ -99,6 +101,7 @@ dependencies {
 - 把 `klib-guard-api` 加入 `compileOnly`；它传递提供编译所需的 Klib Core API；
 - 生成 `META-INF/klib-guard/entrypoint`，不生成 `plugin.yml`；
 - 把 `core()` 视为 Guard 父加载器提供，不打包或重定位 Guard/Core/Bukkit 类；
+- 把宿主提供的 Spigot API、Gson 与 SQLite JDBC 排除在商品 JAR 之外；
 - 选择非 Core Klib 模块时，只把这些模块及其私有依赖打入并重定位到 `targetPackage.libs`；
 - 在 `check` 与 `guardProductJar` 中拒绝 Collector 不接受的路径、字节码和嵌套制品。
 
@@ -120,6 +123,8 @@ OpenContainer 身份由支持 `klib-guard-kether-interop-v1` 的 KlibGuard 门�
 
 - `core()`、`config()`、`lang()`、`command()`；
 - `item()`、`data()`、`ui()`、`script()`、`hook()`、`remote()`；
+- 数据能力使用 `data { json(); jdbc(); sqlite(); mysql() }` 显式选择；单独的 `data()` 只选择
+  轻量基础模块。Gson 与 SQLite 驱动由宿主提供，MySQL 驱动仅随 `mysql()` 显式选择；
 - `compat()`、`compatV1_12()`、`compatV1_20()`、`compatV1_21()`、`compatV26()`；
 - 完全不选择 Klib 模块时使用 `none()`。
 
@@ -145,10 +150,25 @@ OpenContainer 身份由支持 `klib-guard-kether-interop-v1` 的 KlibGuard 门�
 
 ## 打包
 
-`implementation` 和 `runtimeOnly` 依赖会进入最终 JAR，`compileOnly` 不会。执行：
+插件只打包 Klib 自动选择的模块，以及显式声明在 `klibEmbedded` 中的第三方依赖。
+`implementation`、`runtimeOnly` 和 `compileOnly` 都不会被隐式打入最终 JAR：
+
+```kotlin
+dependencies {
+    implementation("com.example:host-or-external-runtime:1.0.0")
+    klibEmbedded("com.example:private-library:1.0.0")
+}
+```
+
+执行：
 
 ```bash
 ./gradlew clean shadowJar
 ```
 
 部署 `build/libs/<项目>-<版本>-all.jar`，不要部署普通 JAR。
+
+构建过程先在 `build/intermediates/klib/candidate.jar` 生成候选包。Guard 候选包只有通过完整
+边界验证后才会原子发布到 `build/libs`；验证失败时不会留下同名可上传包。每次构建还会在
+`build/reports/klib/bundle-report.txt` 输出按依赖统计的压缩前体积和条目数，并标出宿主提供的
+依赖边界。

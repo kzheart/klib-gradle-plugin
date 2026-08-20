@@ -1,5 +1,7 @@
 package me.kzheart.klib.gradle;
 
+import org.gradle.api.Action;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -52,6 +54,14 @@ public final class KlibModulesSpec {
 
     public void data() {
         select(KlibModule.DATA);
+    }
+
+    /** 选择数据基础模块及显式存储能力。 */
+    public void data(Action<? super KlibDataModulesSpec> action) {
+        select(KlibModule.DATA);
+        KlibDataModulesSpec spec = new KlibDataModulesSpec();
+        action.execute(spec);
+        selected.addAll(spec.selected());
     }
 
     public void ui() {

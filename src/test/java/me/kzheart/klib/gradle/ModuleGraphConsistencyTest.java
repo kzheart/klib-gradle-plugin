@@ -27,6 +27,10 @@ class ModuleGraphConsistencyTest {
         expected.put("command", Arrays.asList("core", "lang"));
         expected.put("item", Collections.<String>emptyList());
         expected.put("data", Collections.singletonList("core"));
+        expected.put("data-json", Collections.singletonList("data"));
+        expected.put("data-jdbc", Collections.singletonList("data"));
+        expected.put("data-sqlite", Collections.singletonList("data-jdbc"));
+        expected.put("data-mysql", Collections.singletonList("data-jdbc"));
         expected.put("ui", Arrays.asList("core", "item"));
         expected.put("script", Collections.singletonList("core"));
         expected.put("hook", Collections.singletonList("core"));

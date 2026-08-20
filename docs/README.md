@@ -1,8 +1,8 @@
 # Klib Gradle Plugin
 
 Plugin ID: `me.kzheart.klib`
-Plugin version: `0.4.0`
-Bundled Klib library version: `0.3.0`
+Plugin version: `0.5.0`
+Bundled Klib library version: `0.4.0`
 Bundled Guard API version: `0.2.0`
 
 The plugin supports two mutually exclusive artifacts: ordinary Java 8 Bukkit/Paper plugins and
@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.4.0"
+    id("me.kzheart.klib") version "0.5.0"
 }
 
 group = "com.example"
@@ -56,11 +56,13 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.12.2-R0.1-20180712.012057-156") {
         isTransitive = false
     }
+    // Only dependencies explicitly declared here enter the final JAR.
+    // klibEmbedded("com.example:private-library:1.0.0")
 }
 ```
 
 Do not manually add Klib `implementation(...)` dependencies when using `modules {}`. The plugin
-adds `me.kzheart.klib:klib-<module>:0.3.0` and its dependency closure from Maven Central.
+adds `me.kzheart.klib:klib-<module>:0.4.0` and its dependency closure from Maven Central.
 
 ## KlibGuard cloud products
 
@@ -68,7 +70,7 @@ A cloud product has no Bukkit main class and must not contain `plugin.yml`:
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.4.0"
+    id("me.kzheart.klib") version "0.5.0"
 }
 
 group = "com.example"
@@ -101,6 +103,7 @@ dependencies {
 - generates `META-INF/klib-guard/entrypoint` instead of `plugin.yml`;
 - treats `core()` as parent-provided by Guard, so Guard/Core/Bukkit classes are neither packaged nor
   relocated;
+- excludes the host-provided Spigot API, Gson, and SQLite JDBC driver from the product JAR;
 - packages and selectively relocates chosen non-Core Klib modules and their private dependencies
   below `targetPackage.libs`;
 - rejects paths, bytecode, and nested artifacts that the Collector release boundary does not accept.
@@ -127,6 +130,9 @@ Available methods:
 
 - `core()`, `config()`, `lang()`, `command()`;
 - `item()`, `data()`, `ui()`, `script()`, `hook()`, `remote()`;
+- `data { json(); jdbc(); sqlite(); mysql() }` for explicit data capabilities; plain `data()` selects
+  only the lightweight base module. Gson and SQLite are host-provided, while MySQL is selected only
+  by `mysql()`;
 - `compat()`, `compatV1_12()`, `compatV1_20()`, `compatV1_21()`, `compatV26()`;
 - `none()` when no Klib module should be included.
 
@@ -152,11 +158,26 @@ IDE completion is available because module names are methods rather than strings
 
 ## Packaging
 
-`implementation` and `runtimeOnly` dependencies are included in the final JAR. `compileOnly`
-dependencies are not included. Run:
+The plugin packages automatically selected Klib modules and third-party dependencies declared in
+`klibEmbedded`. Dependencies in `implementation`, `runtimeOnly`, and `compileOnly` are never bundled
+implicitly:
+
+```kotlin
+dependencies {
+    implementation("com.example:host-or-external-runtime:1.0.0")
+    klibEmbedded("com.example:private-library:1.0.0")
+}
+```
+
+Run:
 
 ```bash
 ./gradlew clean shadowJar
 ```
 
 Deploy `build/libs/<project>-<version>-all.jar`, not the ordinary JAR.
+
+Packaging first writes `build/intermediates/klib/candidate.jar`. A Guard candidate is atomically
+published to `build/libs` only after complete boundary verification, so a failed build leaves no
+same-version upload artifact. `build/reports/klib/bundle-report.txt` lists archive size and entry
+count for each embedded dependency and records the host-provided boundary.

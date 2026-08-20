@@ -36,7 +36,7 @@ class GuardProductModeTest {
 
         Path coreJar = publishClassModule(
                 "klib-core",
-                "0.3.0",
+                GradleFixture.KLIB_VERSION,
                 "me.kzheart.klib.scope.Scope",
                 "package me.kzheart.klib.scope; public interface Scope { }",
                 Collections.<Path>emptyList(),
@@ -53,19 +53,23 @@ class GuardProductModeTest {
                 "<dependencies><dependency>"
                         + "<groupId>me.kzheart.klib</groupId>"
                         + "<artifactId>klib-core</artifactId>"
-                        + "<version>0.3.0</version>"
+                        + "<version>" + GradleFixture.KLIB_VERSION + "</version>"
                         + "</dependency></dependencies>");
         publishClassModule(
                 "klib-script",
-                "0.3.0",
+                GradleFixture.KLIB_VERSION,
                 "me.kzheart.klib.script.KetherScriptEngine",
                 "package me.kzheart.klib.script; public final class KetherScriptEngine { }",
                 Collections.singletonList(coreJar),
                 "<dependencies><dependency>"
                         + "<groupId>me.kzheart.klib</groupId>"
                         + "<artifactId>klib-core</artifactId>"
-                        + "<version>0.3.0</version>"
-                        + "</dependency></dependencies>");
+                        + "<version>" + GradleFixture.KLIB_VERSION + "</version>"
+                        + "</dependency>"
+                        + dependency("org.spigotmc", "spigot-api", "1.0.0")
+                        + dependency("com.google.code.gson", "gson", "1.0.0")
+                        + dependency("org.xerial", "sqlite-jdbc", "1.0.0")
+                        + "</dependencies>");
     }
 
     @Test
@@ -90,12 +94,40 @@ class GuardProductModeTest {
     @Test
     void collectorBoundaryRejectsUserSuppliedPluginYaml() throws Exception {
         writeGuardProject(true, false);
+        Path stale = projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar");
+        Files.createDirectories(stale.getParent());
+        Files.write(stale, new byte[]{1, 2, 3});
 
         BuildResult result = GradleFixture.buildAndFail(projectDirectory, "check");
 
         assertTrue(result.getOutput().contains(
-                "Invalid Guard product JAR: forbidden Guard product entry: plugin.yml"),
+                "Bukkit descriptor is forbidden (1): plugin.yml"),
                 result.getOutput());
+        assertFalse(Files.exists(stale));
+    }
+
+    @Test
+    void reportsMultipleGuardBoundaryViolationsAndPublishesNothing() throws Exception {
+        writeGuardProject(true, false);
+        Path library = projectDirectory.resolve("libs/native.jar");
+        Files.createDirectories(library.getParent());
+        try (ZipOutputStream jar = new ZipOutputStream(Files.newOutputStream(library))) {
+            jar.putNextEntry(new ZipEntry("native/linux/libfixture.so"));
+            jar.write(new byte[]{1, 2, 3});
+            jar.closeEntry();
+        }
+        Files.write(projectDirectory.resolve("build.gradle.kts"), ("\n"
+                + "dependencies { klibEmbedded(files(\"libs/native.jar\")) }\n")
+                .getBytes(StandardCharsets.UTF_8), java.nio.file.StandardOpenOption.APPEND);
+
+        BuildResult result = GradleFixture.buildAndFail(projectDirectory, "guardProductJar");
+
+        assertTrue(result.getOutput().contains("Bukkit descriptor is forbidden"),
+                result.getOutput());
+        assertTrue(result.getOutput().contains("native library is forbidden"),
+                result.getOutput());
+        assertFalse(Files.exists(projectDirectory.resolve(
+                "build/libs/fixture-1.2.3-guard.jar")));
     }
 
     @Test
@@ -154,7 +186,7 @@ class GuardProductModeTest {
         BuildResult result = GradleFixture.buildAndFail(projectDirectory, "guardProductJar");
 
         assertTrue(result.getOutput().contains(
-                "missing Guard Kether interoperability descriptor"), result.getOutput());
+                "missing META-INF/klib-guard/kether-interop.properties"), result.getOutput());
     }
 
     private void writeGuardProject(boolean pluginYaml, boolean ketherInterop) throws Exception {
@@ -187,6 +219,11 @@ class GuardProductModeTest {
 
     private String repositoryBlock() {
         return "repositories { maven { url = uri(\"" + repository.toUri() + "\") } }\n";
+    }
+
+    private static String dependency(String group, String artifact, String version) {
+        return "<dependency><groupId>" + group + "</groupId><artifactId>" + artifact
+                + "</artifactId><version>" + version + "</version></dependency>";
     }
 
     private ZipFile outputJar() throws Exception {

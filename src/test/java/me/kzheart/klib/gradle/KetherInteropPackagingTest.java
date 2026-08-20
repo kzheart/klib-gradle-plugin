@@ -50,7 +50,7 @@ class KetherInteropPackagingTest {
         String generatedPath = generatedMain.replace('.', '/') + ".class";
         String openApiPath = "com/example/fixture/libs/klib/script/taboolib/common/"
                 + "OpenAPI.class";
-        Path ordinary = projectDirectory.resolve("build/libs/fixture-1.0.0.jar");
+        Path ordinary = projectDirectory.resolve("build/intermediates/klib/base/base.jar");
         try (ZipFile jar = new ZipFile(ordinary.toFile())) {
             assertNull(jar.getEntry(generatedPath));
             assertEquals("com.example.FinalPlugin", yamlMain(jar));
@@ -92,7 +92,7 @@ class KetherInteropPackagingTest {
 
     private void createEmptyKlibLibraries() throws Exception {
         Path libraries = Files.createDirectories(projectDirectory.resolve("libs"));
-        emptyJar(libraries.resolve("klib-core-0.3.0.jar"));
+        emptyJar(libraries.resolve("klib-core-" + GradleFixture.KLIB_VERSION + ".jar"));
         Path source = projectDirectory.resolve("script-source/OpenAPI.java");
         Files.createDirectories(source.getParent());
         Files.write(source, ("package me.kzheart.klib.script.taboolib.common; "
@@ -111,7 +111,8 @@ class KetherInteropPackagingTest {
         assertEquals(0, result);
         Path openApi = classes.resolve(
                 "me/kzheart/klib/script/taboolib/common/OpenAPI.class");
-        Path scriptJar = libraries.resolve("klib-script-0.3.0.jar");
+        Path scriptJar = libraries.resolve(
+                "klib-script-" + GradleFixture.KLIB_VERSION + ".jar");
         try (ZipOutputStream jar = new ZipOutputStream(Files.newOutputStream(scriptJar))) {
             jar.putNextEntry(new ZipEntry(
                     "me/kzheart/klib/script/taboolib/common/OpenAPI.class"));

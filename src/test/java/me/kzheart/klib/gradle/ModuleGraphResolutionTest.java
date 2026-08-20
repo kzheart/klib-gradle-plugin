@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -82,6 +83,20 @@ class ModuleGraphResolutionTest {
     }
 
     @Test
+    void resolvesExplicitDataCapabilities() throws Exception {
+        GradleFixture.writeProject(projectDirectory, ""
+                + "plugins { id(\"me.kzheart.klib\") }\n"
+                + "klib { modules { data { json(); sqlite(); mysql() } } }\n");
+
+        GradleFixture.build(projectDirectory, "klibModuleGraph");
+
+        String graph = new String(
+                Files.readAllBytes(projectDirectory.resolve("build/klib/module-graph.txt")),
+                StandardCharsets.UTF_8);
+        assertEquals("core\ndata\ndata-json\ndata-jdbc\ndata-sqlite\ndata-mysql\n", graph);
+    }
+
+    @Test
     void itemAndCompatDoNotDragInUnrelatedModules() throws Exception {
         GradleFixture.writeProject(projectDirectory, ""
                 + "plugins { id(\"me.kzheart.klib\") }\n"
@@ -134,6 +149,35 @@ class ModuleGraphResolutionTest {
     }
 
     @Test
+    void packagesArtifactsSelectedByNestedDataDsl() throws Exception {
+        Path repository = Files.createDirectories(projectDirectory.resolve("repository"));
+        for (String module : Arrays.asList(
+                "core", "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql")) {
+            publishMarkerModule(repository, module);
+        }
+        GradleFixture.writeProject(projectDirectory, ""
+                + "plugins { id(\"me.kzheart.klib\") }\n"
+                + "version = \"1.0.0\"\n"
+                + "repositories { maven { url = uri(\"" + repository.toUri() + "\") } }\n"
+                + "klib {\n"
+                + "    main(\"com.example.FixturePlugin\")\n"
+                + "    targetPackage(\"com.example.fixture\")\n"
+                + "    modules { data { json(); sqlite(); mysql() } }\n"
+                + "}\n");
+
+        GradleFixture.build(projectDirectory, "shadowJar");
+
+        try (ZipFile jar = new ZipFile(projectDirectory.resolve(
+                "build/libs/fixture-1.0.0-all.jar").toFile())) {
+            for (String module : Arrays.asList(
+                    "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql")) {
+                assertNotNull(jar.getEntry("com/example/fixture/libs/klib/" + module
+                        + "/" + module + ".marker"), module);
+            }
+        }
+    }
+
+    @Test
     void missingSelectedModuleFailsDuringShadowResolution() throws Exception {
         GradleFixture.writeProject(projectDirectory, ""
                 + "plugins { id(\"me.kzheart.klib\") }\n"
@@ -144,7 +188,8 @@ class ModuleGraphResolutionTest {
 
         BuildResult result = GradleFixture.buildAndFail(projectDirectory, "shadowJar");
 
-        assertTrue(result.getOutput().contains("klib-core:0.3.0"));
+        assertTrue(result.getOutput().contains(
+                "klib-core:" + GradleFixture.KLIB_VERSION));
         assertTrue(result.getOutput().contains("Could not resolve")
                 || result.getOutput().contains("Cannot resolve external dependency"));
     }
@@ -187,14 +232,14 @@ class ModuleGraphResolutionTest {
 
     private static void publishMarkerModule(Path repository, String module) throws Exception {
         Path version = repository.resolve(
-                "me/kzheart/klib/klib-" + module + "/0.3.0");
+                "me/kzheart/klib/klib-" + module + "/" + GradleFixture.KLIB_VERSION);
         Files.createDirectories(version);
-        String artifact = "klib-" + module + "-0.3.0";
+        String artifact = "klib-" + module + "-" + GradleFixture.KLIB_VERSION;
         Files.write(version.resolve(artifact + ".pom"), (""
                 + "<project><modelVersion>4.0.0</modelVersion>"
                 + "<groupId>me.kzheart.klib</groupId>"
                 + "<artifactId>klib-" + module + "</artifactId>"
-                + "<version>0.3.0</version></project>")
+                + "<version>" + GradleFixture.KLIB_VERSION + "</version></project>")
                 .getBytes(StandardCharsets.UTF_8));
         try (ZipOutputStream jar = new ZipOutputStream(
                 Files.newOutputStream(version.resolve(artifact + ".jar")))) {

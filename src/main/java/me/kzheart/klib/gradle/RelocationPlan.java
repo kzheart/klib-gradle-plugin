@@ -143,6 +143,10 @@ public final class RelocationPlan {
             case ITEM:
                 return "me.kzheart.klib.item";
             case DATA:
+            case DATA_JSON:
+            case DATA_JDBC:
+            case DATA_SQLITE:
+            case DATA_MYSQL:
                 return "me.kzheart.klib.data";
             case UI:
                 return "me.kzheart.klib.ui";

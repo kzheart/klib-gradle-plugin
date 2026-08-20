@@ -7,8 +7,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
 
 final class GradleFixture {
+    static final String KLIB_VERSION = projectProperty("klibVersion");
+
     private GradleFixture() {
     }
 
@@ -39,5 +43,20 @@ final class GradleFixture {
                 .withProjectDir(directory.toFile())
                 .withPluginClasspath()
                 .withArguments(complete);
+    }
+
+    private static String projectProperty(String name) {
+        Properties properties = new Properties();
+        Path file = Paths.get("gradle.properties").toAbsolutePath();
+        try (java.io.InputStream input = Files.newInputStream(file)) {
+            properties.load(input);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Cannot read " + file, failure);
+        }
+        String value = properties.getProperty(name, "").trim();
+        if (value.isEmpty()) {
+            throw new IllegalStateException(name + " is not set in " + file);
+        }
+        return value;
     }
 }

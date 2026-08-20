@@ -9,6 +9,7 @@ import org.gradle.api.provider.Provider;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
+import org.gradle.api.tasks.Delete;
 import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.api.tasks.compile.JavaCompile;
 
@@ -43,8 +44,30 @@ public final class KlibPlugin implements Plugin<Project> {
                         ? extension.getGuardProduct().getEntrypoint().getOrElse("")
                         : mainClass.get());
 
-        Configuration runtimeClasspath = project.getConfigurations().getByName(
-                JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME);
+        Configuration embedded = project.getConfigurations().create(
+                "klibEmbedded",
+                configuration -> {
+                    configuration.setCanBeConsumed(false);
+                    configuration.setCanBeResolved(false);
+                    configuration.setDescription(
+                            "Dependencies explicitly embedded in the final Klib JAR.");
+                    excludeHostProvided(configuration);
+                });
+        Configuration embeddedClasspath = project.getConfigurations().create(
+                "klibEmbeddedClasspath",
+                configuration -> {
+                    configuration.setCanBeConsumed(false);
+                    configuration.setCanBeResolved(true);
+                    configuration.setDescription(
+                            "Resolved dependencies embedded in the final Klib JAR.");
+                    configuration.extendsFrom(embedded);
+                    excludeHostProvided(configuration);
+                });
+        project.getConfigurations().getByName(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME)
+                .extendsFrom(embedded);
+        project.getConfigurations().getByName(
+                        JavaPlugin.TEST_IMPLEMENTATION_CONFIGURATION_NAME)
+                .extendsFrom(embedded);
 
         TaskProvider<GeneratePluginYamlTask> pluginYaml = project.getTasks().register(
                 "generatePluginYaml",
@@ -136,6 +159,11 @@ public final class KlibPlugin implements Plugin<Project> {
                 });
 
         TaskProvider<Jar> jar = project.getTasks().named(JavaPlugin.JAR_TASK_NAME, Jar.class);
+        jar.configure(task -> {
+            task.getDestinationDirectory().set(project.getLayout().getBuildDirectory().dir(
+                    "intermediates/klib/base"));
+            task.getArchiveFileName().set("base.jar");
+        });
         TaskProvider<PrepareKetherInteropJarTask> interopJar = project.getTasks().register(
                 "prepareKetherInteropJar",
                 PrepareKetherInteropJarTask.class,
@@ -153,23 +181,50 @@ public final class KlibPlugin implements Plugin<Project> {
                     task.getArchiveFile().set(project.getLayout().getBuildDirectory().file(
                             "intermediates/klib/kether-interop.jar"));
                 });
-        TaskProvider<KlibShadeJarTask> shadowJar = project.getTasks().register(
-                "shadowJar",
+        TaskProvider<AnalyzeKlibBundleTask> bundleReport = project.getTasks().register(
+                "klibBundleReport",
+                AnalyzeKlibBundleTask.class,
+                task -> {
+                    task.setGroup("klib");
+                    task.setDescription("Reports the size of every dependency embedded by Klib.");
+                    task.getLibraries().from(embeddedClasspath);
+                    task.getHostProvidedDependencies().set(java.util.Arrays.asList(
+                            "org.spigotmc:spigot-api",
+                            "com.google.code.gson:gson",
+                            "org.xerial:sqlite-jdbc"));
+                    task.getReportFile().set(project.getLayout().getBuildDirectory().file(
+                            "reports/klib/bundle-report.txt"));
+                });
+
+        Provider<String> finalArchiveName = project.provider(() -> project.getName() + "-"
+                + project.getVersion() + (extension.getGuardProductConfigured().get()
+                ? "-guard.jar" : "-all.jar"));
+        Provider<org.gradle.api.file.RegularFile> finalArchive =
+                project.getLayout().getBuildDirectory().file(
+                        finalArchiveName.map(name -> "libs/" + name));
+        TaskProvider<Delete> prepareArchive = project.getTasks().register(
+                "prepareKlibArchive",
+                Delete.class,
+                task -> {
+                    task.setGroup("build");
+                    task.setDescription("Removes the previous final Klib JAR before validation.");
+                    task.delete(finalArchive);
+                });
+
+        TaskProvider<KlibShadeJarTask> candidateJar = project.getTasks().register(
+                "assembleKlibCandidate",
                 KlibShadeJarTask.class,
                 task -> {
                     task.setGroup("build");
-                    task.setDescription("Assembles a relocated, self-contained Bukkit plugin jar.");
-                    task.dependsOn(interopJar, moduleGraph);
+                    task.setDescription("Assembles the relocated Klib JAR candidate.");
+                    task.dependsOn(prepareArchive, interopJar, moduleGraph, bundleReport);
                     task.getBaseJar().set(interopJar.flatMap(
                             PrepareKetherInteropJarTask::getArchiveFile));
-                    task.getLibraries().from(runtimeClasspath);
+                    task.getLibraries().from(embeddedClasspath);
                     task.getProtectedRelocationPrefixes().convention(
                             Collections.<String>emptyList());
                     task.getArchiveFile().set(project.getLayout().getBuildDirectory().file(
-                            project.provider(() -> "libs/" + project.getName() + "-"
-                                    + project.getVersion()
-                                    + (extension.getGuardProductConfigured().get()
-                                    ? "-guard.jar" : "-all.jar"))));
+                            "intermediates/klib/candidate.jar"));
                 });
 
         TaskProvider<VerifyGuardProductJarTask> verifyGuardProduct =
@@ -180,25 +235,43 @@ public final class KlibPlugin implements Plugin<Project> {
                             task.setGroup(LifecycleBasePlugin.VERIFICATION_GROUP);
                             task.setDescription(
                                     "Verifies the KlibGuard cloud product release boundary.");
-                            task.dependsOn(shadowJar);
+                            task.dependsOn(candidateJar);
                             task.getGuardProduct().set(extension.getGuardProductConfigured());
                             task.getInteropEnabled().set(extension.getKetherInterop());
                             task.getArchiveFile().set(
-                                    shadowJar.flatMap(KlibShadeJarTask::getArchiveFile));
+                                    candidateJar.flatMap(KlibShadeJarTask::getArchiveFile));
                         });
+
+        TaskProvider<PromoteKlibJarTask> publishJar = project.getTasks().register(
+                "publishKlibJar",
+                PromoteKlibJarTask.class,
+                task -> {
+                    task.setGroup("build");
+                    task.setDescription("Publishes a validated Klib JAR to build/libs.");
+                    task.dependsOn(verifyGuardProduct);
+                    task.getCandidateFile().set(
+                            candidateJar.flatMap(KlibShadeJarTask::getArchiveFile));
+                    task.getArchiveFile().set(finalArchive);
+                });
+
+        project.getTasks().register("shadowJar", task -> {
+            task.setGroup("build");
+            task.setDescription("Assembles and publishes the final Klib JAR.");
+            task.dependsOn(publishJar);
+        });
 
         project.getTasks().register("guardProductJar", task -> {
             task.setGroup("build");
             task.setDescription("Assembles and verifies a KlibGuard cloud product JAR.");
-            task.dependsOn(verifyGuardProduct);
+            task.dependsOn(publishJar);
             task.onlyIf(ignored -> extension.getGuardProductConfigured().get());
         });
         project.getTasks().named(LifecycleBasePlugin.ASSEMBLE_TASK_NAME)
-                .configure(task -> task.dependsOn(shadowJar));
+                .configure(task -> task.dependsOn(publishJar));
 
         project.afterEvaluate(ignored -> {
             includeScriptForKetherInterop(extension);
-            configureSelection(project, extension, shadowJar);
+            configureSelection(project, extension, embedded, embeddedClasspath, candidateJar);
             if (extension.getGuardProductConfigured().get()) {
                 project.getTasks().named(LifecycleBasePlugin.ASSEMBLE_TASK_NAME)
                         .configure(task -> task.dependsOn(verifyGuardProduct));
@@ -222,6 +295,19 @@ public final class KlibPlugin implements Plugin<Project> {
         extension.getGuardProduct().getGuardApiVersion().convention(bundledGuardApiVersion());
     }
 
+    private static void excludeHostProvided(Configuration configuration) {
+        exclude(configuration, "org.spigotmc", "spigot-api");
+        exclude(configuration, "com.google.code.gson", "gson");
+        exclude(configuration, "org.xerial", "sqlite-jdbc");
+    }
+
+    private static void exclude(Configuration configuration, String group, String module) {
+        Map<String, String> rule = new LinkedHashMap<String, String>();
+        rule.put("group", group);
+        rule.put("module", module);
+        configuration.exclude(rule);
+    }
+
     private static void includeScriptForKetherInterop(KlibExtension extension) {
         if (!extension.getKetherInterop().get()) {
             return;
@@ -237,7 +323,9 @@ public final class KlibPlugin implements Plugin<Project> {
     private static void configureSelection(
             Project project,
             KlibExtension extension,
-            TaskProvider<KlibShadeJarTask> shadowJar
+            Configuration embedded,
+            Configuration embeddedClasspath,
+            TaskProvider<KlibShadeJarTask> candidateJar
     ) {
         ModuleSelection modules = ModuleSelection.resolve(extension.getModules().get());
         String klibVersion = extension.getLibraryVersion().get().trim();
@@ -260,6 +348,10 @@ public final class KlibPlugin implements Plugin<Project> {
             project.getDependencies().add(
                     JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME,
                     "me.kzheart.klib:klib-guard-api:" + guardApiVersion);
+            Map<String, String> core = new LinkedHashMap<String, String>();
+            core.put("group", "me.kzheart.klib");
+            core.put("module", "klib-core");
+            embeddedClasspath.exclude(core);
         }
         for (KlibModule module : modules.resolved()) {
             if (guardProduct && module == KlibModule.CORE) {
@@ -269,10 +361,10 @@ public final class KlibPlugin implements Plugin<Project> {
                     ? guardModuleDependency(project, module.artifactSuffix(), klibVersion)
                     : moduleDependency(module.artifactSuffix(), klibVersion);
             project.getDependencies().add(
-                    JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME,
+                    embedded.getName(),
                     dependency);
         }
-        shadowJar.configure(task -> {
+        candidateJar.configure(task -> {
             task.getRelocations().set(plan.relocations());
             task.getProtectedRelocationPrefixes().set(plan.protectedPrefixes());
         });

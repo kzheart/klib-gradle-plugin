@@ -17,8 +17,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -56,8 +60,10 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
         }
 
         try (ZipFile archive = new ZipFile(archiveFile)) {
+            Violations violations = new Violations();
             if (archive.size() == 0 || archive.size() > MAX_ENTRIES) {
-                throw invalid("archive entry count is outside the Guard release boundary");
+                violations.add("archive entry count",
+                        archive.size() + " entries; allowed range is 1.." + MAX_ENTRIES);
             }
             Set<String> entries = new HashSet<String>();
             long expanded = 0L;
@@ -66,73 +72,103 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
                     continue;
                 }
                 String name = entry.getName();
-                if (!canonical(name) || !entries.add(name)) {
-                    throw invalid("non-canonical or duplicate entry: " + name);
+                if (!canonical(name)) {
+                    violations.add("non-canonical entry", name);
+                    continue;
+                }
+                if (!entries.add(name)) {
+                    violations.add("duplicate entry", name);
+                    continue;
                 }
                 long size = entry.getSize();
                 long compressedSize = entry.getCompressedSize();
                 if (size <= 0L || size > MAX_ENTRY_BYTES) {
-                    throw invalid("empty or oversized entry: " + name);
+                    violations.add("empty or oversized entry", name + " (" + size + " bytes)");
                 }
                 if (compressedSize > 0L && size > compressedSize * 200L) {
-                    throw invalid("suspicious compression ratio: " + name);
+                    violations.add("suspicious compression ratio", name);
                 }
-                expanded = Math.addExact(expanded, size);
-                if (expanded > MAX_EXPANDED_BYTES || forbidden(name)) {
-                    throw invalid("forbidden Guard product entry: " + name);
+                if (size > 0L && expanded <= MAX_EXPANDED_BYTES) {
+                    if (size > MAX_EXPANDED_BYTES - expanded) {
+                        expanded = MAX_EXPANDED_BYTES + 1L;
+                    } else {
+                        expanded += size;
+                    }
+                }
+                String forbidden = forbiddenReason(name);
+                if (forbidden != null) {
+                    violations.add(forbidden, name);
                 }
                 if (name.endsWith(".class")) {
-                    verifyJava8Class(archive, entry);
+                    String classViolation = verifyJava8Class(archive, entry);
+                    if (classViolation != null) {
+                        violations.add(classViolation, name);
+                    }
                 }
+            }
+            if (expanded > MAX_EXPANDED_BYTES) {
+                violations.add("expanded archive size",
+                        "exceeds " + MAX_EXPANDED_BYTES + " bytes");
             }
 
             ZipEntry descriptor = archive.getEntry(ENTRYPOINT);
             if (descriptor == null || descriptor.getSize() > 512L) {
-                throw invalid("missing or oversized Guard entrypoint descriptor");
-            }
-            String entrypoint = new String(readBounded(archive, descriptor, 512),
-                    StandardCharsets.UTF_8).trim();
-            entrypoint = GuardEntrypointSpec.require(entrypoint);
-            String classEntry = entrypoint.replace('.', '/') + ".class";
-            if (!entries.contains(classEntry)) {
-                throw invalid("Guard entrypoint class is missing: " + classEntry);
+                violations.add("Guard entrypoint descriptor",
+                        descriptor == null ? "missing " + ENTRYPOINT : "descriptor exceeds 512 bytes");
+            } else {
+                String entrypoint = new String(readBounded(archive, descriptor, 512),
+                        StandardCharsets.UTF_8).trim();
+                try {
+                    entrypoint = GuardEntrypointSpec.require(entrypoint);
+                    String classEntry = entrypoint.replace('.', '/') + ".class";
+                    if (!entries.contains(classEntry)) {
+                        violations.add("Guard entrypoint class is missing", classEntry);
+                    }
+                } catch (GradleException failure) {
+                    violations.add("invalid Guard entrypoint descriptor", failure.getMessage());
+                }
             }
             ZipEntry ketherInterop = archive.getEntry(KETHER_INTEROP);
             if (getInteropEnabled().get() && ketherInterop == null) {
-                throw invalid("missing Guard Kether interoperability descriptor");
+                violations.add("Guard Kether interoperability descriptor",
+                        "missing " + KETHER_INTEROP);
             }
             if (!getInteropEnabled().get() && ketherInterop != null) {
-                throw invalid("unexpected Guard Kether interoperability descriptor");
+                violations.add("Guard Kether interoperability descriptor",
+                        "unexpected " + KETHER_INTEROP);
             }
             if (ketherInterop != null) {
                 String ketherDescriptor = new String(readBounded(archive, ketherInterop, 128),
                         StandardCharsets.UTF_8);
                 if (!GenerateGuardKetherInteropTask.FORMAT.equals(ketherDescriptor)) {
-                    throw invalid("invalid Guard Kether interoperability descriptor");
+                    violations.add("Guard Kether interoperability descriptor",
+                            "invalid content in " + KETHER_INTEROP);
                 }
+            }
+            if (!violations.isEmpty()) {
+                throw invalid(violations.format());
             }
             getLogger().lifecycle("Guard product verification passed: {}", archiveFile);
         } catch (IOException failure) {
             throw new GradleException("Cannot verify Guard product JAR " + archiveFile, failure);
-        } catch (ArithmeticException failure) {
-            throw invalid("expanded archive size overflowed");
         }
     }
 
-    private static void verifyJava8Class(ZipFile archive, ZipEntry entry) throws IOException {
+    private static String verifyJava8Class(ZipFile archive, ZipEntry entry) throws IOException {
         byte[] header = readBounded(archive, entry, 8);
         if (header.length < 8
                 || (header[0] & 0xff) != 0xca
                 || (header[1] & 0xff) != 0xfe
                 || (header[2] & 0xff) != 0xba
                 || (header[3] & 0xff) != 0xbe) {
-            throw invalid("invalid class file: " + entry.getName());
+            return "invalid class file";
         }
         int minor = (header[4] & 0xff) << 8 | (header[5] & 0xff);
         int major = (header[6] & 0xff) << 8 | (header[7] & 0xff);
         if (major < 45 || major > 52 || major == 45 && minor > 3 || major > 45 && minor != 0) {
-            throw invalid("class is not Java 8 compatible: " + entry.getName());
+            return "class is not Java 8 compatible";
         }
+        return null;
     }
 
     private static byte[] readBounded(ZipFile archive, ZipEntry entry, int limit)
@@ -166,21 +202,65 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
         return true;
     }
 
-    private static boolean forbidden(String name) {
+    private static String forbiddenReason(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
-        return "plugin.yml".equals(name)
-                || lower.startsWith("meta-inf/versions/")
-                || name.startsWith("META-INF/klib-guard/native/")
-                || name.startsWith("me/kzheart/klib/")
-                || name.startsWith("org/bukkit/")
-                || lower.endsWith(".jar")
-                || lower.endsWith(".zip")
-                || lower.endsWith(".so")
-                || lower.endsWith(".dll")
-                || lower.endsWith(".dylib");
+        if ("plugin.yml".equals(lower)) {
+            return "Bukkit descriptor is forbidden";
+        }
+        if (lower.startsWith("meta-inf/versions/")) {
+            return "multi-release entry is forbidden";
+        }
+        if (name.startsWith("META-INF/klib-guard/native/")
+                || lower.endsWith(".so") || lower.endsWith(".dll")
+                || lower.endsWith(".dylib")) {
+            return "native library is forbidden";
+        }
+        if (name.startsWith("me/kzheart/klib/") || name.startsWith("org/bukkit/")) {
+            return "parent-provided namespace is forbidden";
+        }
+        if (lower.endsWith(".jar") || lower.endsWith(".zip")) {
+            return "nested archive is forbidden";
+        }
+        return null;
     }
 
     private static GradleException invalid(String detail) {
         return new GradleException("Invalid Guard product JAR: " + detail);
+    }
+
+    private static final class Violations {
+        private static final int MAX_EXAMPLES = 3;
+        private final Map<String, Bucket> buckets = new LinkedHashMap<String, Bucket>();
+
+        private void add(String reason, String detail) {
+            Bucket bucket = buckets.get(reason);
+            if (bucket == null) {
+                bucket = new Bucket();
+                buckets.put(reason, bucket);
+            }
+            bucket.count++;
+            if (bucket.examples.size() < MAX_EXAMPLES) {
+                bucket.examples.add(detail);
+            }
+        }
+
+        private boolean isEmpty() {
+            return buckets.isEmpty();
+        }
+
+        private String format() {
+            StringBuilder message = new StringBuilder("release boundary violations:");
+            for (Map.Entry<String, Bucket> entry : buckets.entrySet()) {
+                message.append("\n - ").append(entry.getKey())
+                        .append(" (").append(entry.getValue().count).append("): ")
+                        .append(String.join(", ", entry.getValue().examples));
+            }
+            return message.toString();
+        }
+    }
+
+    private static final class Bucket {
+        private int count;
+        private final List<String> examples = new ArrayList<String>();
     }
 }
