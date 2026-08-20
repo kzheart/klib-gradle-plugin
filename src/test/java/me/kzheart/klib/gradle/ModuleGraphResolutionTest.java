@@ -144,7 +144,7 @@ class ModuleGraphResolutionTest {
 
         BuildResult result = GradleFixture.buildAndFail(projectDirectory, "shadowJar");
 
-        assertTrue(result.getOutput().contains("klib-core:0.2.0"));
+        assertTrue(result.getOutput().contains("klib-core:0.3.0"));
         assertTrue(result.getOutput().contains("Could not resolve")
                 || result.getOutput().contains("Cannot resolve external dependency"));
     }
@@ -187,14 +187,14 @@ class ModuleGraphResolutionTest {
 
     private static void publishMarkerModule(Path repository, String module) throws Exception {
         Path version = repository.resolve(
-                "me/kzheart/klib/klib-" + module + "/0.2.0");
+                "me/kzheart/klib/klib-" + module + "/0.3.0");
         Files.createDirectories(version);
-        String artifact = "klib-" + module + "-0.2.0";
+        String artifact = "klib-" + module + "-0.3.0";
         Files.write(version.resolve(artifact + ".pom"), (""
                 + "<project><modelVersion>4.0.0</modelVersion>"
                 + "<groupId>me.kzheart.klib</groupId>"
                 + "<artifactId>klib-" + module + "</artifactId>"
-                + "<version>0.2.0</version></project>")
+                + "<version>0.3.0</version></project>")
                 .getBytes(StandardCharsets.UTF_8));
         try (ZipOutputStream jar = new ZipOutputStream(
                 Files.newOutputStream(version.resolve(artifact + ".jar")))) {

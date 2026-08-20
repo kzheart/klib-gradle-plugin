@@ -36,14 +36,14 @@ class GuardProductModeTest {
 
         Path coreJar = publishClassModule(
                 "klib-core",
-                "0.2.0",
+                "0.3.0",
                 "me.kzheart.klib.scope.Scope",
                 "package me.kzheart.klib.scope; public interface Scope { }",
                 Collections.<Path>emptyList(),
                 "");
         publishClassModule(
                 "klib-guard-api",
-                "0.1.0",
+                "0.2.0",
                 "me.kzheart.klib.guard.KlibCloudPlugin",
                 "package me.kzheart.klib.guard; "
                         + "import me.kzheart.klib.scope.Scope; "
@@ -53,13 +53,24 @@ class GuardProductModeTest {
                 "<dependencies><dependency>"
                         + "<groupId>me.kzheart.klib</groupId>"
                         + "<artifactId>klib-core</artifactId>"
-                        + "<version>0.2.0</version>"
+                        + "<version>0.3.0</version>"
+                        + "</dependency></dependencies>");
+        publishClassModule(
+                "klib-script",
+                "0.3.0",
+                "me.kzheart.klib.script.KetherScriptEngine",
+                "package me.kzheart.klib.script; public final class KetherScriptEngine { }",
+                Collections.singletonList(coreJar),
+                "<dependencies><dependency>"
+                        + "<groupId>me.kzheart.klib</groupId>"
+                        + "<artifactId>klib-core</artifactId>"
+                        + "<version>0.3.0</version>"
                         + "</dependency></dependencies>");
     }
 
     @Test
     void buildsVerifiedGuardProductWithoutBukkitDescriptorOrParentClasses() throws Exception {
-        writeGuardProject(false);
+        writeGuardProject(false, false);
 
         BuildResult result = GradleFixture.build(projectDirectory, "guardProductJar");
 
@@ -69,6 +80,7 @@ class GuardProductModeTest {
         try (ZipFile jar = outputJar()) {
             assertNotNull(jar.getEntry("com/example/CloudExample.class"));
             assertNotNull(jar.getEntry("META-INF/klib-guard/entrypoint"));
+            assertNull(jar.getEntry("META-INF/klib-guard/kether-interop.properties"));
             assertNull(jar.getEntry("plugin.yml"));
             assertFalse(jar.stream().anyMatch(entry ->
                     entry.getName().startsWith("me/kzheart/klib/")));
@@ -77,7 +89,7 @@ class GuardProductModeTest {
 
     @Test
     void collectorBoundaryRejectsUserSuppliedPluginYaml() throws Exception {
-        writeGuardProject(true);
+        writeGuardProject(true, false);
 
         BuildResult result = GradleFixture.buildAndFail(projectDirectory, "check");
 
@@ -103,7 +115,49 @@ class GuardProductModeTest {
         assertFalse(result.getOutput().contains("klib.main is not set"), result.getOutput());
     }
 
-    private void writeGuardProject(boolean pluginYaml) throws Exception {
+    @Test
+    void buildsGuardKetherInteropAsAProductCapability() throws Exception {
+        writeGuardProject(false, true);
+
+        BuildResult result = GradleFixture.build(projectDirectory, "guardProductJar");
+
+        assertEquals(TaskOutcome.SUCCESS,
+                result.task(":generateGuardKetherInterop").getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, result.task(":verifyGuardProductJar").getOutcome());
+        try (ZipFile jar = outputJar()) {
+            ZipEntry descriptor = jar.getEntry(
+                    "META-INF/klib-guard/kether-interop.properties");
+            assertNotNull(descriptor);
+            assertEquals(GenerateGuardKetherInteropTask.FORMAT,
+                    new String(read(jar, descriptor), StandardCharsets.UTF_8));
+            assertNotNull(jar.getEntry(
+                    "com/example/libs/klib/script/KetherScriptEngine.class"));
+            assertNull(jar.getEntry("plugin.yml"));
+            assertFalse(jar.stream().anyMatch(entry ->
+                    entry.getName().endsWith("/taboolib/platform/BukkitPlugin.class")));
+        }
+        String graph = new String(Files.readAllBytes(
+                projectDirectory.resolve("build/klib/module-graph.txt")),
+                StandardCharsets.UTF_8);
+        assertEquals("core\nscript\n", graph);
+    }
+
+    @Test
+    void rejectsGuardKetherInteropWhenTheGeneratedMarkerIsExcluded() throws Exception {
+        writeGuardProject(false, true);
+        Files.write(projectDirectory.resolve("build.gradle.kts"), ("\n"
+                + "tasks.processResources {\n"
+                + "    exclude(\"META-INF/klib-guard/kether-interop.properties\")\n"
+                + "}\n").getBytes(StandardCharsets.UTF_8),
+                java.nio.file.StandardOpenOption.APPEND);
+
+        BuildResult result = GradleFixture.buildAndFail(projectDirectory, "guardProductJar");
+
+        assertTrue(result.getOutput().contains(
+                "missing Guard Kether interoperability descriptor"), result.getOutput());
+    }
+
+    private void writeGuardProject(boolean pluginYaml, boolean ketherInterop) throws Exception {
         GradleFixture.writeProject(projectDirectory, ""
                 + "plugins { id(\"me.kzheart.klib\") }\n"
                 + "version = \"1.2.3\"\n"
@@ -111,6 +165,7 @@ class GuardProductModeTest {
                 + "klib {\n"
                 + "    targetPackage(\"com.example\")\n"
                 + "    modules { core() }\n"
+                + (ketherInterop ? "    ketherInterop(true)\n" : "")
                 + "    guardProduct {\n"
                 + "        entrypoint(\"com.example.CloudExample\")\n"
                 + "    }\n"
@@ -184,6 +239,18 @@ class GuardProductModeTest {
             jar.closeEntry();
         }
         return jarPath;
+    }
+
+    private static byte[] read(ZipFile jar, ZipEntry entry) throws Exception {
+        try (java.io.InputStream input = jar.getInputStream(entry)) {
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                output.write(buffer, 0, count);
+            }
+            return output.toByteArray();
+        }
     }
 
     private static String joinClasspath(List<Path> values) {

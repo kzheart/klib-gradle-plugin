@@ -77,6 +77,21 @@ public final class KlibPlugin implements Plugin<Project> {
                             "generated/klib-guard/META-INF/klib-guard/entrypoint"));
                 });
 
+        TaskProvider<GenerateGuardKetherInteropTask> guardKetherInterop =
+                project.getTasks().register(
+                        "generateGuardKetherInterop",
+                        GenerateGuardKetherInteropTask.class,
+                        task -> {
+                            task.setGroup("klib");
+                            task.setDescription(
+                                    "Generates the KlibGuard Kether interoperability descriptor.");
+                            task.getGuardProduct().set(extension.getGuardProductConfigured());
+                            task.getInteropEnabled().set(extension.getKetherInterop());
+                            task.getOutputFile().set(project.getLayout().getBuildDirectory().file(
+                                    "generated/klib-guard/META-INF/klib-guard/"
+                                            + "kether-interop.properties"));
+                        });
+
         TaskProvider<GenerateRemoteAccessTask> remoteAccess = project.getTasks().register(
                 "generateRemoteAccess",
                 GenerateRemoteAccessTask.class,
@@ -106,7 +121,8 @@ public final class KlibPlugin implements Plugin<Project> {
                             GenerateRemoteAccessTask::getOutputDirectory));
                 });
         project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME)
-                .configure(task -> task.dependsOn(pluginYaml, guardEntrypoint));
+                .configure(task -> task.dependsOn(
+                        pluginYaml, guardEntrypoint, guardKetherInterop));
 
         TaskProvider<ResolveKlibModulesTask> moduleGraph = project.getTasks().register(
                 "klibModuleGraph",
@@ -166,6 +182,7 @@ public final class KlibPlugin implements Plugin<Project> {
                                     "Verifies the KlibGuard cloud product release boundary.");
                             task.dependsOn(shadowJar);
                             task.getGuardProduct().set(extension.getGuardProductConfigured());
+                            task.getInteropEnabled().set(extension.getKetherInterop());
                             task.getArchiveFile().set(
                                     shadowJar.flatMap(KlibShadeJarTask::getArchiveFile));
                         });
@@ -237,10 +254,6 @@ public final class KlibPlugin implements Plugin<Project> {
                         extension.getRelocations().get());
 
         if (guardProduct) {
-            if (extension.getKetherInterop().get()) {
-                throw new org.gradle.api.GradleException(
-                        "klib.ketherInterop is not supported for Guard products");
-            }
             String guardApiVersion = extension.getGuardProduct()
                     .getGuardApiVersion().get().trim();
             requireSemanticVersion("klib.guardProduct.guardApiVersion", guardApiVersion);

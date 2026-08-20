@@ -6,7 +6,7 @@ Gradle build integration for Java 8 Bukkit/Paper plugins and KlibGuard cloud pro
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.3.0"
+    id("me.kzheart.klib") version "0.4.0"
 }
 
 klib {
@@ -19,10 +19,11 @@ klib {
 }
 ```
 
-For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.2.0`
+For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.3.0`
 modules, and builds a relocated `-all.jar`. For KlibGuard products, `guardProduct {}` generates the
 cloud entrypoint, keeps Guard/Core parent-provided, selectively relocates private modules, and
-builds a Collector-validated `-guard.jar`.
+builds a Collector-validated `-guard.jar`. Guard products may also use `ketherInterop(true)` to
+declare the portal-brokered Kether protocol without adding a Bukkit main class or `plugin.yml`.
 
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 

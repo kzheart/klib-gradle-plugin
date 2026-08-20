@@ -1,9 +1,9 @@
 # Klib Gradle Plugin
 
 Plugin ID: `me.kzheart.klib`
-Plugin version: `0.3.0`
-Bundled Klib library version: `0.2.0`
-Bundled Guard API version: `0.1.0`
+Plugin version: `0.4.0`
+Bundled Klib library version: `0.3.0`
+Bundled Guard API version: `0.2.0`
 
 The plugin supports two mutually exclusive artifacts: ordinary Java 8 Bukkit/Paper plugins and
 cloud products loaded by the KlibGuard portal. Both modes share the type-safe module DSL, Maven
@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.3.0"
+    id("me.kzheart.klib") version "0.4.0"
 }
 
 group = "com.example"
@@ -60,7 +60,7 @@ dependencies {
 ```
 
 Do not manually add Klib `implementation(...)` dependencies when using `modules {}`. The plugin
-adds `me.kzheart.klib:klib-<module>:0.2.0` and its dependency closure from Maven Central.
+adds `me.kzheart.klib:klib-<module>:0.3.0` and its dependency closure from Maven Central.
 
 ## KlibGuard cloud products
 
@@ -68,7 +68,7 @@ A cloud product has no Bukkit main class and must not contain `plugin.yml`:
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.3.0"
+    id("me.kzheart.klib") version "0.4.0"
 }
 
 group = "com.example"
@@ -76,13 +76,15 @@ version = "1.0.0"
 
 klib {
     targetPackage("com.example.cloud")
+    // Optional: share Kether actions through the KlibGuard portal.
+    ketherInterop(true)
     modules {
         core()
     }
     guardProduct {
         entrypoint("com.example.cloud.CloudExample")
-        // Defaults to 0.1.0; override only for an explicitly tested combination.
-        // guardApiVersion("0.1.0")
+        // Defaults to 0.2.0; override only for an explicitly tested combination.
+        // guardApiVersion("0.2.0")
     }
 }
 
@@ -102,6 +104,12 @@ dependencies {
 - packages and selectively relocates chosen non-Core Klib modules and their private dependencies
   below `targetPackage.libs`;
 - rejects paths, bytecode, and nested artifacts that the Collector release boundary does not accept.
+
+For a Guard product, `ketherInterop(true)` automatically selects `script()` and generates
+`META-INF/klib-guard/kether-interop.properties`. It still generates neither a Bukkit main class nor
+`plugin.yml`: a KlibGuard portal supporting `klib-guard-kether-interop-v1` owns the OpenContainer
+identity, while the product binds its registry with
+`GuardKetherInterop.install(root, statements, host)`.
 
 Run:
 
@@ -137,7 +145,7 @@ IDE completion is available because module names are methods rather than strings
 | `modules { ... }` | Select Klib capabilities and their dependency closure |
 | `depend(...)` / `softdepend(...)` | Generate Bukkit dependency metadata |
 | `relocate(source, suffix)` | Relocate an additional third-party package |
-| `ketherInterop(true)` | Generate the TabooLib Kether-compatible entry point |
+| `ketherInterop(true)` | Generate a TabooLib entry for Bukkit, or declare portal Kether interop for Guard |
 | `libraryVersion(...)` | Override the bundled Klib version for explicit compatibility testing |
 | `guardProduct { entrypoint(...) }` | Build a KlibGuard cloud product and declare its entry point |
 | `guardApiVersion(...)` | Override the bundled Guard API version inside `guardProduct {}` |

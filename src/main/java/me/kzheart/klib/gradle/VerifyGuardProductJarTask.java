@@ -27,6 +27,8 @@ import java.util.zip.ZipFile;
 @DisableCachingByDefault(because = "Verification task has no outputs")
 public abstract class VerifyGuardProductJarTask extends DefaultTask {
     private static final String ENTRYPOINT = "META-INF/klib-guard/entrypoint";
+    private static final String KETHER_INTEROP =
+            "META-INF/klib-guard/kether-interop.properties";
     private static final long MAX_ARCHIVE_BYTES = 128L << 20;
     private static final long MAX_ENTRY_BYTES = 16L << 20;
     private static final long MAX_EXPANDED_BYTES = 256L << 20;
@@ -34,6 +36,9 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
 
     @Input
     public abstract Property<Boolean> getGuardProduct();
+
+    @Input
+    public abstract Property<Boolean> getInteropEnabled();
 
     @InputFile
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -91,6 +96,20 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
             String classEntry = entrypoint.replace('.', '/') + ".class";
             if (!entries.contains(classEntry)) {
                 throw invalid("Guard entrypoint class is missing: " + classEntry);
+            }
+            ZipEntry ketherInterop = archive.getEntry(KETHER_INTEROP);
+            if (getInteropEnabled().get() && ketherInterop == null) {
+                throw invalid("missing Guard Kether interoperability descriptor");
+            }
+            if (!getInteropEnabled().get() && ketherInterop != null) {
+                throw invalid("unexpected Guard Kether interoperability descriptor");
+            }
+            if (ketherInterop != null) {
+                String ketherDescriptor = new String(readBounded(archive, ketherInterop, 128),
+                        StandardCharsets.UTF_8);
+                if (!GenerateGuardKetherInteropTask.FORMAT.equals(ketherDescriptor)) {
+                    throw invalid("invalid Guard Kether interoperability descriptor");
+                }
             }
             getLogger().lifecycle("Guard product verification passed: {}", archiveFile);
         } catch (IOException failure) {

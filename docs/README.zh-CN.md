@@ -1,9 +1,9 @@
 # Klib Gradle 插件
 
 插件 ID：`me.kzheart.klib`
-插件版本：`0.3.0`
-默认 Klib 库版本：`0.2.0`
-默认 Guard API 版本：`0.1.0`
+插件版本：`0.4.0`
+默认 Klib 库版本：`0.3.0`
+默认 Guard API 版本：`0.2.0`
 
 插件支持两种互斥产物：普通 Java 8 Bukkit/Paper 插件，以及由 KlibGuard 门户加载的云端商品。
 两种模式共用类型安全模块 DSL、Maven Central 依赖解析和确定性重定位。
@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.3.0"
+    id("me.kzheart.klib") version "0.4.0"
 }
 
 group = "com.example"
@@ -59,7 +59,7 @@ dependencies {
 ```
 
 使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从 Maven Central 自动加入
-`me.kzheart.klib:klib-<module>:0.2.0` 及其模块闭包。
+`me.kzheart.klib:klib-<module>:0.3.0` 及其模块闭包。
 
 ## KlibGuard 云端商品
 
@@ -67,7 +67,7 @@ dependencies {
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.3.0"
+    id("me.kzheart.klib") version "0.4.0"
 }
 
 group = "com.example"
@@ -75,13 +75,15 @@ version = "1.0.0"
 
 klib {
     targetPackage("com.example.cloud")
+    // 可选：通过 KlibGuard 门户与同服 TabooLib 容器双向共享 Kether action。
+    ketherInterop(true)
     modules {
         core()
     }
     guardProduct {
         entrypoint("com.example.cloud.CloudExample")
-        // 默认 0.1.0；只有验证特殊组合时才覆盖。
-        // guardApiVersion("0.1.0")
+        // 默认 0.2.0；只有验证特殊组合时才覆盖。
+        // guardApiVersion("0.2.0")
     }
 }
 
@@ -99,6 +101,11 @@ dependencies {
 - 把 `core()` 视为 Guard 父加载器提供，不打包或重定位 Guard/Core/Bukkit 类；
 - 选择非 Core Klib 模块时，只把这些模块及其私有依赖打入并重定位到 `targetPackage.libs`；
 - 在 `check` 与 `guardProductJar` 中拒绝 Collector 不接受的路径、字节码和嵌套制品。
+
+Guard 商品启用 `ketherInterop(true)` 时，插件会自动加入 `script()` 并生成
+`META-INF/klib-guard/kether-interop.properties`。商品仍不会生成 Bukkit 主类或 `plugin.yml`；实际
+OpenContainer 身份由支持 `klib-guard-kether-interop-v1` 的 KlibGuard 门户统一提供，商品通过
+`GuardKetherInterop.install(root, statements, host)` 把自己的注册表绑定到当前授权代次。
 
 执行：
 
@@ -131,7 +138,7 @@ dependencies {
 | `modules { ... }` | 选择 Klib 模块并自动解析依赖闭包 |
 | `depend(...)` / `softdepend(...)` | 生成 Bukkit 依赖元数据 |
 | `relocate(source, suffix)` | 重定位额外的第三方包 |
-| `ketherInterop(true)` | 生成 TabooLib Kether 兼容入口 |
+| `ketherInterop(true)` | 普通插件生成 TabooLib 入口；Guard 商品声明门户级 Kether 互操作能力 |
 | `libraryVersion(...)` | 仅在明确验证特殊版本组合时覆盖默认 Klib 版本 |
 | `guardProduct { entrypoint(...) }` | 切换为 KlibGuard 云端商品并声明入口类 |
 | `guardApiVersion(...)` | 在 `guardProduct {}` 内覆盖默认 Guard API 版本 |
