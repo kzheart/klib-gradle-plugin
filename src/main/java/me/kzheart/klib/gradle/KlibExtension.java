@@ -24,12 +24,17 @@ public class KlibExtension {
     private final Property<Boolean> ketherInterop;
     private final KlibRemoteSpec remote;
     private final Property<Boolean> remoteConfigured;
+    private final KlibGuardProductSpec guardProduct;
+    private final Property<Boolean> guardProductConfigured;
 
     @Inject
     public KlibExtension(ObjectFactory objects) {
         remote = objects.newInstance(KlibRemoteSpec.class);
         remoteConfigured = objects.property(Boolean.class);
         remoteConfigured.convention(Boolean.FALSE);
+        guardProduct = objects.newInstance(KlibGuardProductSpec.class);
+        guardProductConfigured = objects.property(Boolean.class);
+        guardProductConfigured.convention(Boolean.FALSE);
         name = objects.property(String.class);
         main = objects.property(String.class);
         version = objects.property(String.class);
@@ -162,5 +167,20 @@ public class KlibExtension {
     public void remote(Action<? super KlibRemoteSpec> action) {
         action.execute(remote);
         remoteConfigured.set(Boolean.TRUE);
+    }
+
+    public KlibGuardProductSpec getGuardProduct() {
+        return guardProduct;
+    }
+
+    /** 是否声明过 {@code guardProduct { }} 块。 */
+    public Property<Boolean> getGuardProductConfigured() {
+        return guardProductConfigured;
+    }
+
+    /** 切换为由 KlibGuard 门户加载的云端商品构建模式。 */
+    public void guardProduct(Action<? super KlibGuardProductSpec> action) {
+        action.execute(guardProduct);
+        guardProductConfigured.set(Boolean.TRUE);
     }
 }

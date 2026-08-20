@@ -29,6 +29,7 @@ fun requiredVersionProperty(name: String): String {
 
 val pluginVersion = requiredVersionProperty("pluginVersion")
 val klibVersion = requiredVersionProperty("klibVersion")
+val guardApiVersion = requiredVersionProperty("guardApiVersion")
 version = pluginVersion
 
 java {
@@ -62,6 +63,7 @@ val generateBundledKlibVersion = tasks.register<WriteProperties>("generateBundle
     destinationFile.set(layout.buildDirectory.file(
         "generated/klib-plugin-version/klib-gradle-plugin.properties"))
     property("libraryVersion", klibVersion)
+    property("guardApiVersion", guardApiVersion)
 }
 
 tasks.processResources {

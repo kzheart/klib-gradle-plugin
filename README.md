@@ -2,11 +2,11 @@
 
 [中文文档](docs/README.zh-CN.md) | [English documentation](docs/README.md)
 
-Gradle build integration for Java 8 Bukkit and Paper plugins using Klib.
+Gradle build integration for Java 8 Bukkit/Paper plugins and KlibGuard cloud products.
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.2.0"
+    id("me.kzheart.klib") version "0.3.0"
 }
 
 klib {
@@ -19,8 +19,10 @@ klib {
 }
 ```
 
-The plugin generates `plugin.yml`, adds the selected Klib `0.2.0` modules from Maven Central,
-resolves their module closure, and builds a relocated `-all.jar` for deployment.
+For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.2.0`
+modules, and builds a relocated `-all.jar`. For KlibGuard products, `guardProduct {}` generates the
+cloud entrypoint, keeps Guard/Core parent-provided, selectively relocates private modules, and
+builds a Collector-validated `-guard.jar`.
 
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 

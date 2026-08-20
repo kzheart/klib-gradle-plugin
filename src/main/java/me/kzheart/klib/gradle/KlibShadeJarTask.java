@@ -4,6 +4,7 @@ import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
@@ -50,6 +51,9 @@ public abstract class KlibShadeJarTask extends DefaultTask {
 
     @Input
     public abstract MapProperty<String, String> getRelocations();
+
+    @Input
+    public abstract ListProperty<String> getProtectedRelocationPrefixes();
 
     @OutputFile
     public abstract RegularFileProperty getArchiveFile();
@@ -163,13 +167,22 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             Map<String, Resource> entries
     ) {
         Map<String, String> relocations = getRelocations().get();
-        String name = relocatePath ? relocatePath(originalName, relocations) : originalName;
+        List<String> protectedPrefixes = getProtectedRelocationPrefixes().get();
+        String name = relocatePath
+                ? relocatePath(originalName, relocations, protectedPrefixes)
+                : originalName;
         byte[] content = originalContent;
         if (relocateContent && originalName.endsWith(".class")) {
-            content = ClassRelocator.relocate(originalContent, relocations);
+            content = ClassRelocator.relocate(
+                    originalContent,
+                    relocations,
+                    protectedPrefixes);
         } else if (relocateContent && isTextMetadata(originalName)) {
             String text = new String(originalContent, StandardCharsets.UTF_8);
-            content = ClassRelocator.replace(text, relocations).getBytes(StandardCharsets.UTF_8);
+            content = ClassRelocator.replace(
+                    text,
+                    relocations,
+                    protectedPrefixes).getBytes(StandardCharsets.UTF_8);
         }
 
         Resource previous = entries.get(name);
@@ -204,15 +217,12 @@ public abstract class KlibShadeJarTask extends DefaultTask {
         }
     }
 
-    private static String relocatePath(String path, Map<String, String> relocations) {
-        String result = path;
-        for (Map.Entry<String, String> relocation : relocations.entrySet()) {
-            result = result.replace(relocation.getKey(), relocation.getValue());
-            result = result.replace(
-                    relocation.getKey().replace('.', '/'),
-                    relocation.getValue().replace('.', '/'));
-        }
-        return result;
+    private static String relocatePath(
+            String path,
+            Map<String, String> relocations,
+            List<String> protectedPrefixes
+    ) {
+        return ClassRelocator.replace(path, relocations, protectedPrefixes);
     }
 
     private static boolean excluded(String name, boolean library) {

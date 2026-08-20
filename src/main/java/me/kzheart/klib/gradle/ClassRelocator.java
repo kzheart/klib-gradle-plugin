@@ -7,6 +7,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /** 无需加载目标类即可重写类文件中的 UTF-8 常量。 */
@@ -17,6 +19,14 @@ final class ClassRelocator {
     }
 
     static byte[] relocate(byte[] source, Map<String, String> relocations) {
+        return relocate(source, relocations, Collections.<String>emptyList());
+    }
+
+    static byte[] relocate(
+            byte[] source,
+            Map<String, String> relocations,
+            List<String> protectedPrefixes
+    ) {
         try {
             ByteArrayInputStream bytes = new ByteArrayInputStream(source);
             DataInputStream input = new DataInputStream(bytes);
@@ -35,7 +45,7 @@ final class ClassRelocator {
                 int tag = input.readUnsignedByte();
                 output.writeByte(tag);
                 if (tag == 1) {
-                    output.writeUTF(replace(input.readUTF(), relocations));
+                    output.writeUTF(replace(input.readUTF(), relocations, protectedPrefixes));
                 } else if (tag == 3 || tag == 4) {
                     copy(input, output, 4);
                 } else if (tag == 5 || tag == 6) {
@@ -61,14 +71,68 @@ final class ClassRelocator {
     }
 
     static String replace(String source, Map<String, String> relocations) {
+        return replace(source, relocations, Collections.<String>emptyList());
+    }
+
+    static String replace(
+            String source,
+            Map<String, String> relocations,
+            List<String> protectedPrefixes
+    ) {
         String result = source;
         for (Map.Entry<String, String> relocation : relocations.entrySet()) {
-            result = result.replace(relocation.getKey(), relocation.getValue());
-            result = result.replace(
+            result = replaceUnprotected(
+                    result,
+                    relocation.getKey(),
+                    relocation.getValue(),
+                    protectedPrefixes,
+                    false);
+            result = replaceUnprotected(
+                    result,
                     relocation.getKey().replace('.', '/'),
-                    relocation.getValue().replace('.', '/'));
+                    relocation.getValue().replace('.', '/'),
+                    protectedPrefixes,
+                    true);
         }
         return result;
+    }
+
+    private static String replaceUnprotected(
+            String value,
+            String source,
+            String target,
+            List<String> protectedPrefixes,
+            boolean internalNames
+    ) {
+        int match = value.indexOf(source);
+        if (match < 0) {
+            return value;
+        }
+        StringBuilder result = new StringBuilder(value.length() + 32);
+        int cursor = 0;
+        while (match >= 0) {
+            result.append(value, cursor, match);
+            result.append(isProtected(value, match, protectedPrefixes, internalNames)
+                    ? source : target);
+            cursor = match + source.length();
+            match = value.indexOf(source, cursor);
+        }
+        return result.append(value, cursor, value.length()).toString();
+    }
+
+    private static boolean isProtected(
+            String value,
+            int offset,
+            List<String> protectedPrefixes,
+            boolean internalNames
+    ) {
+        for (String prefix : protectedPrefixes) {
+            String candidate = internalNames ? prefix.replace('.', '/') : prefix;
+            if (value.startsWith(candidate, offset)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void copy(DataInputStream input, DataOutputStream output, int length)

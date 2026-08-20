@@ -1,11 +1,12 @@
 # Klib Gradle 插件
 
-插件 ID：`me.kzheart.klib`  
-插件版本：`0.2.0`  
+插件 ID：`me.kzheart.klib`
+插件版本：`0.3.0`
 默认 Klib 库版本：`0.2.0`
+默认 Guard API 版本：`0.1.0`
 
-插件用于构建 Java 8 Bukkit/Paper 插件：生成 `plugin.yml`，通过类型安全 DSL 选择模块，从
-Maven Central 加入对应依赖及其闭包，并把运行时依赖重定位进一个可部署的 JAR。
+插件支持两种互斥产物：普通 Java 8 Bukkit/Paper 插件，以及由 KlibGuard 门户加载的云端商品。
+两种模式共用类型安全模块 DSL、Maven Central 依赖解析和确定性重定位。
 
 ## 快速开始
 
@@ -31,7 +32,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.2.0"
+    id("me.kzheart.klib") version "0.3.0"
 }
 
 group = "com.example"
@@ -60,6 +61,54 @@ dependencies {
 使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从 Maven Central 自动加入
 `me.kzheart.klib:klib-<module>:0.2.0` 及其模块闭包。
 
+## KlibGuard 云端商品
+
+云端商品不声明 Bukkit 主类，也不包含 `plugin.yml`：
+
+```kotlin
+plugins {
+    id("me.kzheart.klib") version "0.3.0"
+}
+
+group = "com.example"
+version = "1.0.0"
+
+klib {
+    targetPackage("com.example.cloud")
+    modules {
+        core()
+    }
+    guardProduct {
+        entrypoint("com.example.cloud.CloudExample")
+        // 默认 0.1.0；只有验证特殊组合时才覆盖。
+        // guardApiVersion("0.1.0")
+    }
+}
+
+dependencies {
+    compileOnly("org.spigotmc:spigot-api:1.12.2-R0.1-20180712.012057-156") {
+        isTransitive = false
+    }
+}
+```
+
+`guardProduct {}` 会自动完成以下工作：
+
+- 把 `klib-guard-api` 加入 `compileOnly`；它传递提供编译所需的 Klib Core API；
+- 生成 `META-INF/klib-guard/entrypoint`，不生成 `plugin.yml`；
+- 把 `core()` 视为 Guard 父加载器提供，不打包或重定位 Guard/Core/Bukkit 类；
+- 选择非 Core Klib 模块时，只把这些模块及其私有依赖打入并重定位到 `targetPackage.libs`；
+- 在 `check` 与 `guardProductJar` 中拒绝 Collector 不接受的路径、字节码和嵌套制品。
+
+执行：
+
+```bash
+./gradlew clean guardProductJar
+```
+
+上传 `build/libs/<项目>-<版本>-guard.jar` 到 KlibGuard Collector。它不能直接放入服务器的
+`plugins` 目录。`remote {}` 仍表示独立的 Klib Remote 遥测配置，不是 Guard 授权配置。
+
 ## 模块选择
 
 - `core()`、`config()`、`lang()`、`command()`；
@@ -84,6 +133,8 @@ dependencies {
 | `relocate(source, suffix)` | 重定位额外的第三方包 |
 | `ketherInterop(true)` | 生成 TabooLib Kether 兼容入口 |
 | `libraryVersion(...)` | 仅在明确验证特殊版本组合时覆盖默认 Klib 版本 |
+| `guardProduct { entrypoint(...) }` | 切换为 KlibGuard 云端商品并声明入口类 |
+| `guardApiVersion(...)` | 在 `guardProduct {}` 内覆盖默认 Guard API 版本 |
 
 ## 打包
 

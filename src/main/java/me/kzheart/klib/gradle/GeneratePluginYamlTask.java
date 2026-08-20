@@ -23,6 +23,9 @@ import java.util.Set;
 @CacheableTask
 public abstract class GeneratePluginYamlTask extends DefaultTask {
     @Input
+    public abstract Property<Boolean> getBukkitPlugin();
+
+    @Input
     public abstract Property<String> getPluginName();
 
     @Input
@@ -46,6 +49,15 @@ public abstract class GeneratePluginYamlTask extends DefaultTask {
 
     @TaskAction
     public void generate() {
+        Path output = getOutputFile().get().getAsFile().toPath();
+        if (!getBukkitPlugin().get()) {
+            try {
+                Files.deleteIfExists(output);
+                return;
+            } catch (IOException failure) {
+                throw new GradleException("Cannot remove generated plugin.yml", failure);
+            }
+        }
         String name = require("name", getPluginName().get());
         String main = MainClassSpec.require(getMainClass().getOrElse(""));
         String version = require("version", getPluginVersion().get());
@@ -64,7 +76,6 @@ public abstract class GeneratePluginYamlTask extends DefaultTask {
         sequence(yaml, "depend", hardDependencies);
         sequence(yaml, "softdepend", softDependencies);
 
-        Path output = getOutputFile().get().getAsFile().toPath();
         try {
             Files.createDirectories(output.getParent());
             Files.write(output, yaml.toString().getBytes(StandardCharsets.UTF_8));
