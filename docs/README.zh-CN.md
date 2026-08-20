@@ -1,7 +1,7 @@
 # Klib Gradle 插件
 
 插件 ID：`me.kzheart.klib`
-插件版本：`0.5.0`
+插件版本：`0.5.1`
 默认 Klib 库版本：`0.4.0`
 默认 Guard API 版本：`0.2.0`
 
@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.5.0"
+    id("me.kzheart.klib") version "0.5.1"
 }
 
 group = "com.example"
@@ -69,7 +69,7 @@ dependencies {
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.5.0"
+    id("me.kzheart.klib") version "0.5.1"
 }
 
 group = "com.example"

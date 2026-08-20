@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 - 2026-08-21
+
+### Fixes
+
+- Keep user-declared host APIs such as Spigot visible on `compileOnly` and `compileClasspath`, while
+  continuing to exclude Spigot, Gson, and SQLite JDBC from embedded artifacts.
+- Add real compilation fixtures proving host APIs remain available to source code without leaking
+  into ordinary or Guard product JARs.
+
 ## 0.5.0 - 2026-08-21
 
 ### Breaking Changes

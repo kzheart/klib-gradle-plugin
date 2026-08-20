@@ -1,5 +1,13 @@
 # 更新日志
 
+## 0.5.1 - 2026-08-21
+
+### 修复
+
+- 保留用户显式声明的 Spigot 等宿主 API 在 `compileOnly` 与 `compileClasspath` 中的可见性，
+  同时继续阻止 Spigot、Gson 和 SQLite JDBC 进入最终内嵌制品。
+- 新增真实编译夹具，验证宿主 API 可供源码编译且不会泄漏到普通插件或 Guard 商品 JAR。
+
 ## 0.5.0 - 2026-08-21
 
 ### 破坏性变更

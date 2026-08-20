@@ -1,7 +1,7 @@
 # Klib Gradle Plugin
 
 Plugin ID: `me.kzheart.klib`
-Plugin version: `0.5.0`
+Plugin version: `0.5.1`
 Bundled Klib library version: `0.4.0`
 Bundled Guard API version: `0.2.0`
 
@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.5.0"
+    id("me.kzheart.klib") version "0.5.1"
 }
 
 group = "com.example"
@@ -70,7 +70,7 @@ A cloud product has no Bukkit main class and must not contain `plugin.yml`:
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.5.0"
+    id("me.kzheart.klib") version "0.5.1"
 }
 
 group = "com.example"
