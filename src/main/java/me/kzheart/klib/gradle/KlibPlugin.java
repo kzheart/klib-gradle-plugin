@@ -99,6 +99,20 @@ public final class KlibPlugin implements Plugin<Project> {
                             "generated/klib-guard/META-INF/klib-guard/entrypoint"));
                 });
 
+        TaskProvider<GenerateGuardDataDirectoryTask> guardDataDirectory =
+                project.getTasks().register(
+                        "generateGuardDataDirectory",
+                        GenerateGuardDataDirectoryTask.class,
+                        task -> {
+                            task.setGroup("klib");
+                            task.setDescription(
+                                    "Generates the KlibGuard cloud product data directory name.");
+                            task.getGuardProduct().set(extension.getGuardProductConfigured());
+                            task.getDataDirectory().set(extension.getName());
+                            task.getOutputFile().set(project.getLayout().getBuildDirectory().file(
+                                    "generated/klib-guard/META-INF/klib-guard/data-directory"));
+                        });
+
         TaskProvider<GenerateGuardKetherInteropTask> guardKetherInterop =
                 project.getTasks().register(
                         "generateGuardKetherInterop",
@@ -144,7 +158,7 @@ public final class KlibPlugin implements Plugin<Project> {
                 });
         project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME)
                 .configure(task -> task.dependsOn(
-                        pluginYaml, guardEntrypoint, guardKetherInterop));
+                        pluginYaml, guardEntrypoint, guardDataDirectory, guardKetherInterop));
 
         TaskProvider<ResolveKlibModulesTask> moduleGraph = project.getTasks().register(
                 "klibModuleGraph",

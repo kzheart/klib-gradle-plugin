@@ -82,11 +82,13 @@ class GuardProductModeTest {
         BuildResult result = GradleFixture.build(projectDirectory, "guardProductJar");
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":generateGuardEntrypoint").getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, result.task(":generateGuardDataDirectory").getOutcome());
         assertEquals(TaskOutcome.SUCCESS, result.task(":verifyGuardProductJar").getOutcome());
         assertEquals(TaskOutcome.SUCCESS, result.task(":guardProductJar").getOutcome());
         try (ZipFile jar = outputJar()) {
             assertNotNull(jar.getEntry("com/example/CloudExample.class"));
             assertNotNull(jar.getEntry("META-INF/klib-guard/entrypoint"));
+            assertNotNull(jar.getEntry("META-INF/klib-guard/data-directory"));
             assertNull(jar.getEntry("META-INF/klib-guard/kether-interop.properties"));
             assertNull(jar.getEntry("plugin.yml"));
             assertFalse(jar.stream().anyMatch(entry ->

@@ -31,6 +31,7 @@ import java.util.zip.ZipFile;
 @DisableCachingByDefault(because = "Verification task has no outputs")
 public abstract class VerifyGuardProductJarTask extends DefaultTask {
     private static final String ENTRYPOINT = "META-INF/klib-guard/entrypoint";
+    private static final String DATA_DIRECTORY = "META-INF/klib-guard/data-directory";
     private static final String KETHER_INTEROP =
             "META-INF/klib-guard/kether-interop.properties";
     private static final long MAX_ARCHIVE_BYTES = 128L << 20;
@@ -126,6 +127,21 @@ public abstract class VerifyGuardProductJarTask extends DefaultTask {
                     }
                 } catch (GradleException failure) {
                     violations.add("invalid Guard entrypoint descriptor", failure.getMessage());
+                }
+            }
+            ZipEntry dataDirectory = archive.getEntry(DATA_DIRECTORY);
+            if (dataDirectory == null || dataDirectory.getSize() > 128L) {
+                violations.add("Guard data-directory descriptor",
+                        dataDirectory == null
+                                ? "missing " + DATA_DIRECTORY
+                                : "descriptor exceeds 128 bytes");
+            } else {
+                String directory = new String(readBounded(archive, dataDirectory, 128),
+                        StandardCharsets.UTF_8).trim();
+                try {
+                    GuardDataDirectorySpec.require(directory);
+                } catch (GradleException failure) {
+                    violations.add("invalid Guard data-directory descriptor", failure.getMessage());
                 }
             }
             ZipEntry ketherInterop = archive.getEntry(KETHER_INTEROP);
