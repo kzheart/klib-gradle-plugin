@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-10-02
+
+- Fix relocation of single-segment packages such as `kotlin`: JVM paths and dotted names now retain the correct separators without relocating the destination twice.
+- Keep similarly named packages and metadata resource names unchanged. Add a TestKit build that loads and invokes the relocated dependency from the final JAR.
+
 ## 0.6.0 - 2026-10-01
 
 - Add `data { postgresql() }`, dependency closure, PostgreSQL driver relocation and packaging verification.

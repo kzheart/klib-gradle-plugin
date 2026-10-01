@@ -6,7 +6,7 @@ Gradle build integration for Java 8 Bukkit/Paper plugins and KlibGuard cloud pro
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.6.0"
+    id("me.kzheart.klib") version "0.6.1"
 }
 
 klib {
@@ -26,6 +26,9 @@ builds a Collector-validated `-guard.jar`. Guard products may also use `ketherIn
 declare the portal-brokered Kether protocol without adding a Bukkit main class or `plugin.yml`.
 Only dependencies declared in `klibEmbedded` enter the final JAR; ordinary `implementation` and
 `runtimeOnly` dependencies are never bundled implicitly.
+
+Version 0.6.1 fixes single-segment package relocation, including `relocate("kotlin", "kotlin")`.
+Declare the Kotlin standard library in `klibEmbedded` when your plugin must bundle it.
 
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 

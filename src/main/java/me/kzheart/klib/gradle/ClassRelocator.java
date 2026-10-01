@@ -81,6 +81,19 @@ final class ClassRelocator {
     ) {
         String result = source;
         for (Map.Entry<String, String> relocation : relocations.entrySet()) {
+            // 单段包名的 dotted/internal 拼写相同，裸替换两遍会再次命中目标包，
+            // 并把 JVM 路径写成带点的名称。分别匹配分隔符，不触碰 kotlin_module 等资源名。
+            if (relocation.getKey().indexOf('.') < 0) {
+                if (result.equals(relocation.getKey()) && !isProtected(result, 0, protectedPrefixes, false)) {
+                    result = relocation.getValue();
+                } else {
+                    result = replaceUnprotected(result, relocation.getKey() + ".",
+                            relocation.getValue() + ".", protectedPrefixes, false);
+                    result = replaceUnprotected(result, relocation.getKey() + "/",
+                            relocation.getValue().replace('.', '/') + "/", protectedPrefixes, true);
+                }
+                continue;
+            }
             result = replaceUnprotected(
                     result,
                     relocation.getKey(),
