@@ -52,6 +52,7 @@ public final class RelocationPlan {
         mappings.put("de.tr7zw.changeme.nbtapi", libraries + ".nbtapi");
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
+        mappings.put("org.postgresql", libraries + ".postgresql");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
             String source = relocation.getKey() == null ? "" : relocation.getKey().trim();
             String suffix = relocation.getValue() == null ? "" : relocation.getValue().trim();
@@ -101,6 +102,7 @@ public final class RelocationPlan {
         mappings.put("de.tr7zw.changeme.nbtapi", libraries + ".nbtapi");
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
+        mappings.put("org.postgresql", libraries + ".postgresql");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
             String source = relocation.getKey() == null ? "" : relocation.getKey().trim();
             String suffix = relocation.getValue() == null ? "" : relocation.getValue().trim();
@@ -147,6 +149,7 @@ public final class RelocationPlan {
             case DATA_JDBC:
             case DATA_SQLITE:
             case DATA_MYSQL:
+            case DATA_POSTGRESQL:
                 return "me.kzheart.klib.data";
             case UI:
                 return "me.kzheart.klib.ui";

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 - 2026-10-01
+
+- Add `data { postgresql() }`, dependency closure, PostgreSQL driver relocation and packaging verification.
+- Default Klib library version is now `0.8.0`.
+
 ## 0.5.1 - 2026-08-21
 
 ### Fixes

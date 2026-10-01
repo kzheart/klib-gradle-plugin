@@ -6,7 +6,7 @@ Gradle build integration for Java 8 Bukkit/Paper plugins and KlibGuard cloud pro
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.5.1"
+    id("me.kzheart.klib") version "0.6.0"
 }
 
 klib {
@@ -19,7 +19,7 @@ klib {
 }
 ```
 
-For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.4.0`
+For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.8.0`
 modules, and builds a relocated `-all.jar`. For KlibGuard products, `guardProduct {}` generates the
 cloud entrypoint, keeps Guard/Core parent-provided, selectively relocates private modules, and
 builds a Collector-validated `-guard.jar`. Guard products may also use `ketherInterop(true)` to
@@ -30,3 +30,5 @@ Only dependencies declared in `klibEmbedded` enter the final JAR; ordinary `impl
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+Select PostgreSQL with `modules { data { postgresql() } }`, or MySQL with `data { mysql() }`. Each backend includes its JDBC driver; PostgreSQL classes and JDBC service metadata are relocated together.

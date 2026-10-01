@@ -86,14 +86,14 @@ class ModuleGraphResolutionTest {
     void resolvesExplicitDataCapabilities() throws Exception {
         GradleFixture.writeProject(projectDirectory, ""
                 + "plugins { id(\"me.kzheart.klib\") }\n"
-                + "klib { modules { data { json(); sqlite(); mysql() } } }\n");
+                + "klib { modules { data { json(); sqlite(); mysql(); postgresql() } } }\n");
 
         GradleFixture.build(projectDirectory, "klibModuleGraph");
 
         String graph = new String(
                 Files.readAllBytes(projectDirectory.resolve("build/klib/module-graph.txt")),
                 StandardCharsets.UTF_8);
-        assertEquals("core\ndata\ndata-json\ndata-jdbc\ndata-sqlite\ndata-mysql\n", graph);
+        assertEquals("core\ndata\ndata-json\ndata-jdbc\ndata-sqlite\ndata-mysql\ndata-postgresql\n", graph);
     }
 
     @Test
@@ -152,7 +152,7 @@ class ModuleGraphResolutionTest {
     void packagesArtifactsSelectedByNestedDataDsl() throws Exception {
         Path repository = Files.createDirectories(projectDirectory.resolve("repository"));
         for (String module : Arrays.asList(
-                "core", "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql")) {
+                "core", "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql", "data-postgresql")) {
             publishMarkerModule(repository, module);
         }
         GradleFixture.writeProject(projectDirectory, ""
@@ -162,15 +162,19 @@ class ModuleGraphResolutionTest {
                 + "klib {\n"
                 + "    main(\"com.example.FixturePlugin\")\n"
                 + "    targetPackage(\"com.example.fixture\")\n"
-                + "    modules { data { json(); sqlite(); mysql() } }\n"
+                + "    modules { data { json(); sqlite(); mysql(); postgresql() } }\n"
                 + "}\n");
 
         GradleFixture.build(projectDirectory, "shadowJar");
 
         try (ZipFile jar = new ZipFile(projectDirectory.resolve(
                 "build/libs/fixture-1.0.0-all.jar").toFile())) {
+            assertNull(jar.getEntry("org/postgresql/driver.marker"));
+            assertNotNull(jar.getEntry("com/example/fixture/libs/postgresql/driver.marker"));
+            assertEquals("com.example.fixture.libs.postgresql.Driver\n", new String(
+                    readAll(jar, "META-INF/services/java.sql.Driver"), StandardCharsets.UTF_8));
             for (String module : Arrays.asList(
-                    "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql")) {
+                    "data", "data-json", "data-jdbc", "data-sqlite", "data-mysql", "data-postgresql")) {
                 assertNotNull(jar.getEntry("com/example/fixture/libs/klib/" + module
                         + "/" + module + ".marker"), module);
             }
@@ -247,6 +251,24 @@ class ModuleGraphResolutionTest {
                     "me/kzheart/klib/" + module + "/" + module + ".marker"));
             jar.write(module.getBytes(StandardCharsets.UTF_8));
             jar.closeEntry();
+            if ("data-postgresql".equals(module)) {
+                jar.putNextEntry(new ZipEntry("org/postgresql/driver.marker"));
+                jar.write(new byte[]{1});
+                jar.closeEntry();
+                jar.putNextEntry(new ZipEntry("META-INF/services/java.sql.Driver"));
+                jar.write("org.postgresql.Driver\n".getBytes(StandardCharsets.UTF_8));
+                jar.closeEntry();
+            }
+        }
+    }
+
+    private static byte[] readAll(ZipFile jar, String name) throws Exception {
+        try (java.io.InputStream input = jar.getInputStream(jar.getEntry(name));
+             java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            return output.toByteArray();
         }
     }
 }

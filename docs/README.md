@@ -1,8 +1,8 @@
 # Klib Gradle Plugin
 
 Plugin ID: `me.kzheart.klib`
-Plugin version: `0.5.1`
-Bundled Klib library version: `0.4.0`
+Plugin version: `0.6.0`
+Bundled Klib library version: `0.8.0`
 Bundled Guard API version: `0.2.0`
 
 The plugin supports two mutually exclusive artifacts: ordinary Java 8 Bukkit/Paper plugins and
@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.5.1"
+    id("me.kzheart.klib") version "0.6.0"
 }
 
 group = "com.example"
@@ -62,7 +62,7 @@ dependencies {
 ```
 
 Do not manually add Klib `implementation(...)` dependencies when using `modules {}`. The plugin
-adds `me.kzheart.klib:klib-<module>:0.4.0` and its dependency closure from Maven Central.
+adds `me.kzheart.klib:klib-<module>:0.8.0` and its dependency closure from Maven Central.
 
 ## KlibGuard cloud products
 
@@ -70,7 +70,7 @@ A cloud product has no Bukkit main class and must not contain `plugin.yml`:
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.5.1"
+    id("me.kzheart.klib") version "0.6.0"
 }
 
 group = "com.example"
@@ -130,9 +130,9 @@ Available methods:
 
 - `core()`, `config()`, `lang()`, `command()`;
 - `item()`, `data()`, `ui()`, `script()`, `hook()`, `remote()`;
-- `data { json(); jdbc(); sqlite(); mysql() }` for explicit data capabilities; plain `data()` selects
+- `data { json(); jdbc(); sqlite(); mysql(); postgresql() }` for explicit data capabilities; plain `data()` selects
   only the lightweight base module. Gson and SQLite are host-provided, while MySQL is selected only
-  by `mysql()`;
+  by `mysql()`; PostgreSQL and its relocated driver are selected by `postgresql()`;
 - `compat()`, `compatV1_12()`, `compatV1_20()`, `compatV1_21()`, `compatV26()`;
 - `none()` when no Klib module should be included.
 

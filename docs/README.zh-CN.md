@@ -1,8 +1,8 @@
 # Klib Gradle 插件
 
 插件 ID：`me.kzheart.klib`
-插件版本：`0.5.1`
-默认 Klib 库版本：`0.4.0`
+插件版本：`0.6.0`
+默认 Klib 库版本：`0.8.0`
 默认 Guard API 版本：`0.2.0`
 
 插件支持两种互斥产物：普通 Java 8 Bukkit/Paper 插件，以及由 KlibGuard 门户加载的云端商品。
@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.5.1"
+    id("me.kzheart.klib") version "0.6.0"
 }
 
 group = "com.example"
@@ -61,7 +61,7 @@ dependencies {
 ```
 
 使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从 Maven Central 自动加入
-`me.kzheart.klib:klib-<module>:0.4.0` 及其模块闭包。
+`me.kzheart.klib:klib-<module>:0.8.0` 及其模块闭包。
 
 ## KlibGuard 云端商品
 
@@ -69,7 +69,7 @@ dependencies {
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.5.1"
+    id("me.kzheart.klib") version "0.6.0"
 }
 
 group = "com.example"
@@ -123,8 +123,8 @@ OpenContainer 身份由支持 `klib-guard-kether-interop-v1` 的 KlibGuard 门�
 
 - `core()`、`config()`、`lang()`、`command()`；
 - `item()`、`data()`、`ui()`、`script()`、`hook()`、`remote()`；
-- 数据能力使用 `data { json(); jdbc(); sqlite(); mysql() }` 显式选择；单独的 `data()` 只选择
-  轻量基础模块。Gson 与 SQLite 驱动由宿主提供，MySQL 驱动仅随 `mysql()` 显式选择；
+- 数据能力使用 `data { json(); jdbc(); sqlite(); mysql(); postgresql() }` 显式选择；单独的 `data()` 只选择
+  轻量基础模块。Gson 与 SQLite 驱动由宿主提供，MySQL 和 PostgreSQL 驱动分别随 `mysql()` 与 `postgresql()` 显式选择，PostgreSQL 驱动自动重定位；
 - `compat()`、`compatV1_12()`、`compatV1_20()`、`compatV1_21()`、`compatV26()`；
 - 完全不选择 Klib 模块时使用 `none()`。
 

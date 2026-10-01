@@ -26,6 +26,10 @@ public final class KlibDataModulesSpec {
         selected.add(KlibModule.DATA_MYSQL);
     }
 
+    public void postgresql() {
+        selected.add(KlibModule.DATA_POSTGRESQL);
+    }
+
     List<KlibModule> selected() {
         return Collections.unmodifiableList(new ArrayList<KlibModule>(selected));
     }
