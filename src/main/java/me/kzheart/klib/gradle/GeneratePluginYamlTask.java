@@ -44,6 +44,9 @@ public abstract class GeneratePluginYamlTask extends DefaultTask {
     @Input
     public abstract ListProperty<String> getSoftdepend();
 
+    @Input
+    public abstract ListProperty<String> getLibraries();
+
     @OutputFile
     public abstract RegularFileProperty getOutputFile();
 
@@ -75,6 +78,7 @@ public abstract class GeneratePluginYamlTask extends DefaultTask {
         }
         sequence(yaml, "depend", hardDependencies);
         sequence(yaml, "softdepend", softDependencies);
+        sequence(yaml, "libraries", normalized(getLibraries().get()));
 
         try {
             Files.createDirectories(output.getParent());

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0 (2026-10-11)
+
+- Add `externalLibrary(coordinate, sourcePackage)` for Bukkit/Paper runtime libraries, excluding external artifacts from shading and preserving original package names.
+
 ## 0.6.1 - 2026-10-02
 
 - Fix relocation of single-segment packages such as `kotlin`: JVM paths and dotted names now retain the correct separators without relocating the destination twice.

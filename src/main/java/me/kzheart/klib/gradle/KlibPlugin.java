@@ -82,6 +82,8 @@ public final class KlibPlugin implements Plugin<Project> {
                     task.getApiVersion().set(extension.getApiVersion());
                     task.getDepend().set(extension.getDepend());
                     task.getSoftdepend().set(extension.getSoftdepend());
+                    task.getLibraries().set(extension.getExternalLibraries().map(
+                            values -> new java.util.ArrayList<String>(new java.util.LinkedHashSet<String>(values.values()))));
                     task.getOutputFile().set(project.getLayout().getBuildDirectory().file(
                             "generated/klib/plugin.yml"));
                 });
@@ -302,6 +304,7 @@ public final class KlibPlugin implements Plugin<Project> {
         extension.getSoftdepend().convention(Collections.<String>emptyList());
         extension.getModules().convention(Collections.singletonList(KlibModule.CORE));
         extension.getRelocations().convention(Collections.<String, String>emptyMap());
+        extension.getExternalLibraries().convention(Collections.<String, String>emptyMap());
         extension.getLibraryVersion().convention(bundledLibraryVersion());
         extension.getTargetPackage().convention(project.provider(() -> defaultTargetPackage(project)));
         extension.getKetherInterop().convention(false);
@@ -344,6 +347,9 @@ public final class KlibPlugin implements Plugin<Project> {
         String klibVersion = extension.getLibraryVersion().get().trim();
         requireSemanticVersion("klib.libraryVersion", klibVersion);
         boolean guardProduct = extension.getGuardProductConfigured().get();
+        if (guardProduct && !extension.getExternalLibraries().get().isEmpty()) {
+            throw new org.gradle.api.GradleException("externalLibrary requires a Bukkit/Paper library loader");
+        }
         RelocationPlan plan = guardProduct
                 ? RelocationPlan.resolveGuard(
                         modules,
@@ -377,9 +383,21 @@ public final class KlibPlugin implements Plugin<Project> {
                     embedded.getName(),
                     dependency);
         }
+        Map<String, String> relocations = new LinkedHashMap<String, String>(plan.relocations());
+        java.util.List<String> protectedPrefixes = new java.util.ArrayList<String>(plan.protectedPrefixes());
+        for (Map.Entry<String, String> library : extension.getExternalLibraries().get().entrySet()) {
+            String[] coordinate = library.getValue().split(":");
+            exclude(embeddedClasspath, coordinate[0], coordinate[1]);
+            ExternalModuleDependency external = (ExternalModuleDependency) project.getDependencies().create(library.getValue());
+            external.version(version -> version.strictly(coordinate[2]));
+            project.getDependencies().add(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME, external);
+            relocations.entrySet().removeIf(entry -> entry.getKey().equals(library.getKey())
+                    || entry.getKey().startsWith(library.getKey() + "."));
+            protectedPrefixes.add(library.getKey());
+        }
         candidateJar.configure(task -> {
-            task.getRelocations().set(plan.relocations());
-            task.getProtectedRelocationPrefixes().set(plan.protectedPrefixes());
+            task.getRelocations().set(relocations);
+            task.getProtectedRelocationPrefixes().set(protectedPrefixes);
         });
     }
 

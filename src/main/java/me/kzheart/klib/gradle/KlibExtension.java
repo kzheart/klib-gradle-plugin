@@ -21,6 +21,7 @@ public class KlibExtension {
     private final Property<String> libraryVersion;
     private final ListProperty<KlibModule> modules;
     private final MapProperty<String, String> relocations;
+    private final MapProperty<String, String> externalLibraries;
     private final Property<Boolean> ketherInterop;
     private final KlibRemoteSpec remote;
     private final Property<Boolean> remoteConfigured;
@@ -45,6 +46,7 @@ public class KlibExtension {
         libraryVersion = objects.property(String.class);
         modules = objects.listProperty(KlibModule.class);
         relocations = objects.mapProperty(String.class, String.class);
+        externalLibraries = objects.mapProperty(String.class, String.class);
         ketherInterop = objects.property(Boolean.class);
     }
 
@@ -86,6 +88,18 @@ public class KlibExtension {
 
     public MapProperty<String, String> getRelocations() {
         return relocations;
+    }
+
+    public MapProperty<String, String> getExternalLibraries() { return externalLibraries; }
+
+    /** 由 Bukkit/Paper libraries 加载的固定 Maven 坐标；指定包不再内嵌或重定位。 */
+    public void externalLibrary(String coordinate, String sourcePackage) {
+        if (coordinate == null || !coordinate.matches("[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+")
+                || coordinate.contains("SNAPSHOT") || sourcePackage == null
+                || !sourcePackage.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)+")) {
+            throw new org.gradle.api.GradleException("externalLibrary requires a fixed group:artifact:version and package");
+        }
+        externalLibraries.put(sourcePackage, coordinate);
     }
 
     public Property<Boolean> getKetherInterop() {

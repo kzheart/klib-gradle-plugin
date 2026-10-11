@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.7.0 (2026-10-11)
+
+- Add `externalLibrary(coordinate, sourcePackage)` for Bukkit/Paper runtime libraries, excluding external artifacts from shading and preserving original package names.
+
 ## 0.6.0 - 2026-10-01
 
 - 新增 `data { postgresql() }`、对应依赖闭包、PostgreSQL 驱动重定位与打包验证。

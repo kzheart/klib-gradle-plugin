@@ -35,3 +35,7 @@ See the [English guide](docs/README.md) for repository setup, the complete DSL, 
 Licensed under the [Apache License 2.0](LICENSE).
 
 Select PostgreSQL with `modules { data { postgresql() } }`, or MySQL with `data { mysql() }`. Each backend includes its JDBC driver; PostgreSQL classes and JDBC service metadata are relocated together.
+
+## 外部运行时依赖
+
+`klib { externalLibrary("org.postgresql:postgresql:<pgjdbc-version>", "org.postgresql") }` 声明固定 Maven 坐标到 Bukkit/Paper `plugin.yml` 的 `libraries`，从内嵌依赖中排除该制品，并停止该包的重定位。要求宿主支持库加载器，部署前准备缓存；Klib 模块仍分别内嵌和隔离。Velocity 和 Guard 商品通过各自宿主提供依赖。
