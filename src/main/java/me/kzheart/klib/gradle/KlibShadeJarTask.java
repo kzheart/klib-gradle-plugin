@@ -6,6 +6,7 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.MapProperty;
+import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
@@ -32,6 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import java.util.jar.Manifest;
+import java.util.jar.Attributes;
+import java.io.ByteArrayInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -42,6 +46,7 @@ public abstract class KlibShadeJarTask extends DefaultTask {
     static final long MAX_ENTRY_BYTES = 64L * 1024L * 1024L;
     static final long MAX_TOTAL_BYTES = 512L * 1024L * 1024L;
     static final int MAX_ENTRIES = 50000;
+
     @InputFile
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract RegularFileProperty getBaseJar();
@@ -54,6 +59,9 @@ public abstract class KlibShadeJarTask extends DefaultTask {
 
     @Input
     public abstract ListProperty<String> getProtectedRelocationPrefixes();
+
+    @Input
+    public abstract Property<Boolean> getGuardProduct();
 
     @OutputFile
     public abstract RegularFileProperty getArchiveFile();
@@ -78,6 +86,7 @@ public abstract class KlibShadeJarTask extends DefaultTask {
                 readArchive(library, true, true, entries, budget);
             }
         }
+        preserveMultiReleaseManifest(entries);
         writeArchive(entries);
     }
 
@@ -113,11 +122,25 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             ReadBudget budget
     ) {
         try (ZipFile zip = new ZipFile(archive)) {
+            ZipEntry manifestEntry = zip.getEntry("META-INF/MANIFEST.MF");
+            boolean multiRelease = false;
+            if (manifestEntry != null) {
+                try (InputStream input = zip.getInputStream(manifestEntry)) {
+                    Manifest manifest = new Manifest(new ByteArrayInputStream(
+                            readBounded(input, budget.remaining(), "META-INF/MANIFEST.MF")));
+                    multiRelease = "true".equalsIgnoreCase(
+                            manifest.getMainAttributes().getValue("Multi-Release"));
+                }
+            }
             List<? extends ZipEntry> archiveEntries = Collections.list(zip.entries());
             Collections.sort(archiveEntries, Comparator.comparing(ZipEntry::getName));
             for (ZipEntry entry : archiveEntries) {
                 if (entry.isDirectory() || excluded(entry.getName(), relocatePath)) {
                     continue;
+                }
+                if (entry.getName().startsWith("META-INF/versions/") && !multiRelease) {
+                    throw new GradleException("Versioned shade entry without Multi-Release: true: "
+                            + archive + "!/" + entry.getName());
                 }
                 budget.entry(entry.getName());
                 try (InputStream input = zip.getInputStream(entry)) {
@@ -133,12 +156,30 @@ public abstract class KlibShadeJarTask extends DefaultTask {
 
     private void readDirectory(File directory, Map<String, Resource> entries, ReadBudget budget) {
         Path root = directory.toPath();
+        final boolean multiRelease;
+        Path manifestPath = root.resolve("META-INF/MANIFEST.MF");
+        try {
+            if (Files.isRegularFile(manifestPath)) {
+                try (InputStream input = Files.newInputStream(manifestPath)) {
+                    Manifest manifest = new Manifest(new ByteArrayInputStream(
+                            readBounded(input, budget.remaining(), "META-INF/MANIFEST.MF")));
+                    multiRelease = "true".equalsIgnoreCase(manifest.getMainAttributes().getValue("Multi-Release"));
+                }
+            } else {
+                multiRelease = false;
+            }
+        } catch (IOException failure) {
+            throw new GradleException("Cannot read shade directory manifest " + directory, failure);
+        }
         try (Stream<Path> files = Files.walk(root)) {
             files.filter(Files::isRegularFile)
                     .sorted()
                     .forEach(path -> {
                         String name = root.relativize(path).toString().replace(File.separatorChar, '/');
                         if (!excluded(name, true)) {
+                            if (name.startsWith("META-INF/versions/") && !multiRelease) {
+                                throw new GradleException("Versioned shade entry without Multi-Release: true: " + path);
+                            }
                             try {
                                 budget.entry(name);
                                 byte[] content;
@@ -172,24 +213,63 @@ public abstract class KlibShadeJarTask extends DefaultTask {
                 ? relocatePath(originalName, relocations, protectedPrefixes)
                 : originalName;
         byte[] content = originalContent;
-        if (relocateContent && originalName.endsWith(".class")) {
-            content = ClassRelocator.relocate(
-                    originalContent,
-                    relocations,
-                    protectedPrefixes);
-        } else if (relocateContent && isTextMetadata(originalName)) {
-            String text = new String(originalContent, StandardCharsets.UTF_8);
-            content = ClassRelocator.replace(
-                    text,
-                    relocations,
-                    protectedPrefixes).getBytes(StandardCharsets.UTF_8);
+        try {
+            if (relocateContent && originalName.endsWith(".class")) {
+                if (getGuardProduct().getOrElse(false)) {
+                    GuardKotlinBoundaryVerifier.verify(originalContent, relocations, protectedPrefixes);
+                }
+                content = ClassRelocator.relocate(
+                        originalContent,
+                        relocations,
+                        protectedPrefixes);
+            } else if (relocateContent && originalName.endsWith(".kotlin_module")) {
+                content = KotlinMetadataRelocator.relocateModule(
+                        originalContent, relocations, protectedPrefixes);
+            } else if (relocateContent && originalName.endsWith(".kotlin_builtins")) {
+                content = KotlinMetadataRelocator.relocateBuiltIns(
+                        originalContent, relocations, protectedPrefixes);
+            } else if (relocateContent && isTextMetadata(originalName)) {
+                String text = new String(originalContent, StandardCharsets.UTF_8);
+                content = ClassRelocator.replace(
+                        text,
+                        relocations,
+                        protectedPrefixes).getBytes(StandardCharsets.UTF_8);
+            }
+
+        } catch (RuntimeException failure) {
+            throw new GradleException("Cannot relocate shade entry " + originalName + ": " + failure.getMessage(), failure);
         }
 
         Resource previous = entries.get(name);
         if (previous == null) {
             entries.put(name, new Resource(content));
+        } else if (name.endsWith(".kotlin_module")) {
+            entries.put(name, new Resource(KotlinMetadataRelocator.mergeModules(
+                    previous.content(), content)));
+        } else if (name.endsWith(".class") && !java.util.Arrays.equals(previous.content(), content)) {
+            throw new GradleException("Conflicting classes in embedded closure: " + name);
         } else if (isMergeable(name)) {
             previous.merge(content);
+        }
+    }
+
+    private static void preserveMultiReleaseManifest(Map<String, Resource> entries) {
+        boolean multiRelease = entries.keySet().stream()
+                .anyMatch(name -> name.startsWith("META-INF/versions/"));
+        if (!multiRelease) {
+            return;
+        }
+        try {
+            Resource original = entries.get("META-INF/MANIFEST.MF");
+            Manifest manifest = original == null ? new Manifest()
+                    : new Manifest(new ByteArrayInputStream(original.content()));
+            manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            manifest.getMainAttributes().putValue("Multi-Release", "true");
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            manifest.write(bytes);
+            entries.put("META-INF/MANIFEST.MF", new Resource(bytes.toByteArray()));
+        } catch (IOException failure) {
+            throw new GradleException("Cannot preserve multi-release manifest", failure);
         }
     }
 
@@ -222,12 +302,27 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             Map<String, String> relocations,
             List<String> protectedPrefixes
     ) {
-        return ClassRelocator.replace(path, relocations, protectedPrefixes);
+        String services = "META-INF/services/";
+        if (path.startsWith(services)) {
+            String service = path.substring(services.length()).replace('.', '/');
+            return services + ClassRelocator.relocateInternalName(service, relocations, protectedPrefixes)
+                    .replace('/', '.');
+        }
+        String versions = "META-INF/versions/";
+        if (path.startsWith(versions)) {
+            int separator = path.indexOf('/', versions.length());
+            if (separator < 0) throw new GradleException("Invalid multi-release entry: " + path);
+            return path.substring(0, separator + 1)
+                    + relocatePath(path.substring(separator + 1), relocations, protectedPrefixes);
+        }
+        // Resource basenames are not package names: kotlin/kotlin.kotlin_builtins must
+        // become <private>/kotlin/kotlin.kotlin_builtins, never rename the second kotlin.
+        return ClassRelocator.relocateInternalName(path, relocations, protectedPrefixes);
     }
 
     private static boolean excluded(String name, boolean library) {
         String upper = name.toUpperCase(java.util.Locale.ROOT);
-        if (upper.startsWith("META-INF/VERSIONS/") || upper.endsWith("/MODULE-INFO.CLASS")
+        if (upper.endsWith("/MODULE-INFO.CLASS")
                 || "MODULE-INFO.CLASS".equals(upper)) {
             return true;
         }

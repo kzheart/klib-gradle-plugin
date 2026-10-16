@@ -97,6 +97,50 @@ class GuardProductModeTest {
     }
 
     @Test
+    void permitsInternalKotlinStdlibWithoutCrossingTheHostBoundary() throws Exception {
+        writeGuardProject(false, false);
+        Path source = projectDirectory.resolve("src/main/kotlin/com/example/InternalKotlin.kt");
+        Files.createDirectories(source.getParent());
+        Files.write(source, ("package com.example\n"
+                + "object InternalKotlin { @JvmStatic fun labels() = listOf(\"private\").map { it.uppercase() } }\n")
+                .getBytes(StandardCharsets.UTF_8));
+        GradleFixture.build(projectDirectory, "guardProductJar");
+        try (ZipFile jar = outputJar()) {
+            assertNotNull(jar.getEntry("com/example/InternalKotlin.class"));
+            assertNotNull(jar.getEntry("com/example/libs/kotlin/Unit.class"));
+        }
+        try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] {
+                projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar").toUri().toURL()}, null)) {
+            assertEquals("[PRIVATE]", loader.loadClass("com.example.InternalKotlin")
+                    .getMethod("labels").invoke(null).toString());
+        }
+    }
+
+    @Test
+    void rejectsPrivateKotlinTypesInAnActualParentApiCall() throws Exception {
+        Path stdlib = java.nio.file.Paths.get(kotlin.Unit.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI());
+        publishClassModule("klib-host-kotlin-api", "1.0",
+                "me.kzheart.klib.scope.HostKotlinApi",
+                "package me.kzheart.klib.scope; public final class HostKotlinApi { "
+                        + "public static kotlin.Unit invoke(kotlin.jvm.functions.Function0<kotlin.Unit> action) "
+                        + "{ return action.invoke(); } }", Collections.singletonList(stdlib), "");
+        writeGuardProject(false, false);
+        Files.write(projectDirectory.resolve("build.gradle.kts"),
+                "\ndependencies { compileOnly(\"me.kzheart.klib:klib-host-kotlin-api:1.0\") }\n"
+                        .getBytes(StandardCharsets.UTF_8), java.nio.file.StandardOpenOption.APPEND);
+        Path source = projectDirectory.resolve("src/main/kotlin/com/example/Boundary.kt");
+        Files.createDirectories(source.getParent());
+        Files.write(source, ("package com.example\n"
+                + "fun crossBoundary() { me.kzheart.klib.scope.HostKotlinApi.invoke { Unit } }\n")
+                .getBytes(StandardCharsets.UTF_8));
+        BuildResult result = GradleFixture.buildAndFail(projectDirectory, "guardProductJar");
+        assertTrue(result.getOutput().contains("Unsupported Guard Kotlin parent boundary"), result.getOutput());
+        assertTrue(result.getOutput().contains("HostKotlinApi.invoke"), result.getOutput());
+        assertFalse(Files.exists(projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar")));
+    }
+
+    @Test
     void collectorBoundaryRejectsUserSuppliedPluginYaml() throws Exception {
         writeGuardProject(true, false);
         Path stale = projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar");

@@ -1,5 +1,14 @@
 # 更新日志
 
+## 未发布
+
+- 默认应用 Kotlin/JVM 2.4.21，混合编译 Kotlin/Java 到 Java 8，并将 stdlib 作为显式内嵌根
+- 统一编译、runtime 与打包依赖版本，保留非内嵌依赖的边界
+- 结构化重定位 Kotlin metadata、module/builtins 与协程命名空间，保留成员标识符和 multi-release 资源
+- `externalLibrary` 支持单段 `kotlin` 根包，明确运行时兼容范围及现有 Guard 限制
+
+- 增加官方 kotlin-reflect 2.4.21 内建包根适配，并提前拒绝静态可见的 Guard 父 API 私有 Kotlin 类型边界
+
 ## 0.7.0 (2026-10-11)
 
 - Add `externalLibrary(coordinate, sourcePackage)` for Bukkit/Paper runtime libraries, excluding external artifacts from shading and preserving original package names.

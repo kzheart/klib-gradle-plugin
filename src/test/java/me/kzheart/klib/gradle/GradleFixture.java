@@ -22,7 +22,7 @@ final class GradleFixture {
                 "rootProject.name = \"fixture\"\n".getBytes(StandardCharsets.UTF_8));
         Files.write(
                 directory.resolve("build.gradle.kts"),
-                body.getBytes(StandardCharsets.UTF_8));
+                (body + "\nrepositories { mavenCentral { content { excludeGroup(\"me.kzheart.klib\") } } }\n").getBytes(StandardCharsets.UTF_8));
     }
 
     static BuildResult build(Path directory, String... arguments) {
@@ -34,11 +34,17 @@ final class GradleFixture {
     }
 
     private static GradleRunner runner(Path directory, String... arguments) {
-        String[] complete = new String[arguments.length + 3];
-        System.arraycopy(arguments, 0, complete, 0, arguments.length);
-        complete[arguments.length] = "--stacktrace";
-        complete[arguments.length + 1] = "--configuration-cache";
-        complete[arguments.length + 2] = "--configuration-cache-problems=fail";
+        java.util.List<String> complete = new java.util.ArrayList<String>(java.util.Arrays.asList(arguments));
+        complete.add("--stacktrace");
+        complete.add("--configuration-cache");
+        complete.add("--configuration-cache-problems=fail");
+        complete.add("--max-workers=2");
+        complete.add("-Pkotlin.compiler.execution.strategy=in-process");
+        for (String key : java.util.Arrays.asList("http.proxyHost", "http.proxyPort", "https.proxyHost",
+                "https.proxyPort", "javax.net.ssl.trustStore")) {
+            String value = System.getProperty(key);
+            if (value != null) complete.add("-D" + key + "=" + value);
+        }
         return GradleRunner.create()
                 .withProjectDir(directory.toFile())
                 .withPluginClasspath()

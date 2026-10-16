@@ -2,18 +2,25 @@ package me.kzheart.klib.gradle;
 
 import org.gradle.api.GradleException;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.commons.Remapper;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** 无需加载目标类即可重写类文件中的 UTF-8 常量。 */
+/** 使用 JVM 结构重定位类引用与反射字符串，保留字段和方法标识符。 */
 final class ClassRelocator {
-    private static final int CLASS_MAGIC = 0xCAFEBABE;
+    private static final String DESCRIPTOR_TYPE = "(?:\\[*[ZCBSIFJD]|\\[*L(?:[\\w$]+/)+[\\w$]+;)";
+    private static final java.util.regex.Pattern TYPE_DESCRIPTOR = java.util.regex.Pattern.compile(DESCRIPTOR_TYPE);
+    private static final java.util.regex.Pattern METHOD_DESCRIPTOR = java.util.regex.Pattern.compile(
+            "\\(" + DESCRIPTOR_TYPE + "*\\)(?:V|" + DESCRIPTOR_TYPE + ")");
+    private static final java.util.regex.Pattern REFLECTION_ARRAY = java.util.regex.Pattern.compile(
+            "\\[+L(?:[\\w$]+\\.)+[\\w$]+;");
+
 
     private ClassRelocator() {
     }
@@ -27,47 +34,73 @@ final class ClassRelocator {
             Map<String, String> relocations,
             List<String> protectedPrefixes
     ) {
+        source = KotlinReflectRelocator.prepare(source, relocations, protectedPrefixes);
+        KotlinMetadataRelocator.PreparedClass metadata =
+                KotlinMetadataRelocator.prepare(source, relocations, protectedPrefixes);
         try {
-            ByteArrayInputStream bytes = new ByteArrayInputStream(source);
-            DataInputStream input = new DataInputStream(bytes);
-            ByteArrayOutputStream result = new ByteArrayOutputStream(source.length + 128);
-            DataOutputStream output = new DataOutputStream(result);
-            int magic = input.readInt();
-            if (magic != CLASS_MAGIC) {
-                throw new GradleException("Invalid class file in shaded dependency");
-            }
-            output.writeInt(magic);
-            output.writeShort(input.readUnsignedShort());
-            output.writeShort(input.readUnsignedShort());
-            int constantPoolCount = input.readUnsignedShort();
-            output.writeShort(constantPoolCount);
-            for (int index = 1; index < constantPoolCount; index++) {
-                int tag = input.readUnsignedByte();
-                output.writeByte(tag);
-                if (tag == 1) {
-                    output.writeUTF(replace(input.readUTF(), relocations, protectedPrefixes));
-                } else if (tag == 3 || tag == 4) {
-                    copy(input, output, 4);
-                } else if (tag == 5 || tag == 6) {
-                    copy(input, output, 8);
-                    index++;
-                } else if (tag == 7 || tag == 8 || tag == 16 || tag == 19 || tag == 20) {
-                    copy(input, output, 2);
-                } else if (tag == 9 || tag == 10 || tag == 11 || tag == 12
-                        || tag == 17 || tag == 18) {
-                    copy(input, output, 4);
-                } else if (tag == 15) {
-                    copy(input, output, 3);
-                } else {
-                    throw new GradleException("Unsupported class constant-pool tag: " + tag);
+            ClassReader reader = new ClassReader(metadata.getClassBytes());
+            ClassWriter writer = new ClassWriter(0);
+            reader.accept(new ClassRemapper(writer, new Remapper(Opcodes.ASM9) {
+                @Override public String map(String internalName) {
+                    return relocateInternalName(internalName, relocations, protectedPrefixes);
                 }
-            }
-            copy(input, output, bytes.available());
-            output.flush();
-            return result.toByteArray();
-        } catch (IOException failure) {
+                @Override public Object mapValue(Object value) {
+                    // Dynamic class names and reflection package strings need relocation too;
+                    // field, method, local-variable and annotation-element identifiers do not.
+                    if (value instanceof String) {
+                        String text = (String) value;
+                        // A user's label "kotlin" is not a class name. Kotlin's own reflection
+                        // implementation constructs built-in package IDs from that bare string.
+                        if (relocations.containsKey(text)) {
+                            String ownerPrefix = text.replace('.', '/') + "/";
+                            if (!reader.getClassName().startsWith(ownerPrefix)) return text;
+                        }
+                        int arguments = text.indexOf('(');
+                        if (arguments > 0 && text.substring(0, arguments).matches("[\\w$]+|<init>")
+                                && METHOD_DESCRIPTOR.matcher(text.substring(arguments)).matches()) {
+                            return text.substring(0, arguments) + mapMethodDesc(text.substring(arguments));
+                        }
+                        if (text.startsWith("(") && METHOD_DESCRIPTOR.matcher(text).matches()) {
+                            try { return mapMethodDesc(text); }
+                            catch (IllegalArgumentException | IndexOutOfBoundsException malformed) { return text; }
+                        }
+                        if (REFLECTION_ARRAY.matcher(text).matches()) {
+                            int element = text.indexOf('L') + 1;
+                            String name = text.substring(element, text.length() - 1).replace('.', '/');
+                            return text.substring(0, element) + map(name).replace('/', '.') + ";";
+                        }
+                        if (TYPE_DESCRIPTOR.matcher(text).matches()) {
+                            try { return mapDesc(text); }
+                            catch (IllegalArgumentException | IndexOutOfBoundsException malformed) { return text; }
+                        }
+                        if (text.indexOf('/') >= 0) {
+                            return relocateInternalName(text, relocations, protectedPrefixes);
+                        }
+                        return relocateInternalName(text.replace('.', '/'), relocations, protectedPrefixes)
+                                .replace('/', '.');
+                    }
+                    return super.mapValue(value);
+                }
+            }), 0);
+            return metadata.restore(writer.toByteArray());
+        } catch (RuntimeException failure) {
             throw new GradleException("Cannot relocate shaded class", failure);
         }
+    }
+
+    static String relocateInternalName(String name, Map<String, String> relocations,
+                                       List<String> protectedPrefixes) {
+        for (String prefix : protectedPrefixes) {
+            String internal = prefix.replace('.', '/');
+            if (name.equals(internal) || name.startsWith(internal + "/")) return name;
+        }
+        Map.Entry<String, String> match = null;
+        for (Map.Entry<String, String> entry : relocations.entrySet()) {
+            String prefix = entry.getKey().replace('.', '/');
+            if ((name.equals(prefix) || name.startsWith(prefix + "/"))
+                    && (match == null || entry.getKey().length() > match.getKey().length())) match = entry;
+        }
+        return match == null ? name : match.getValue().replace('.', '/') + name.substring(match.getKey().length());
     }
 
     static String replace(String source, Map<String, String> relocations) {
@@ -148,10 +181,4 @@ final class ClassRelocator {
         return false;
     }
 
-    private static void copy(DataInputStream input, DataOutputStream output, int length)
-            throws IOException {
-        byte[] buffer = new byte[length];
-        input.readFully(buffer);
-        output.write(buffer);
-    }
 }

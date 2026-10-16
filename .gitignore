@@ -10,3 +10,4 @@ build/
 *.key
 *.p12
 *.pfx
+.kotlin/

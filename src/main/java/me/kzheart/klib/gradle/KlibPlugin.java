@@ -1,6 +1,16 @@
 package me.kzheart.klib.gradle;
 
 import org.gradle.api.Plugin;
+import org.gradle.api.JavaVersion;
+import org.gradle.api.attributes.Bundling;
+import org.gradle.api.attributes.Category;
+import org.gradle.api.attributes.LibraryElements;
+import org.gradle.api.attributes.Usage;
+import org.gradle.api.attributes.java.TargetJvmVersion;
+import org.gradle.api.plugins.JavaPluginExtension;
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget;
+import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType;
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ExternalModuleDependency;
@@ -24,6 +34,7 @@ import java.util.regex.Pattern;
 /** 用于生成 Bukkit 元数据并构建自包含 klib 发行包的 Gradle 插件入口。 */
 public final class KlibPlugin implements Plugin<Project> {
     public static final String PLUGIN_ID = "me.kzheart.klib";
+    static final String KOTLIN_VERSION = "2.4.21";
     private static final String VERSION_RESOURCE = "/META-INF/klib-gradle-plugin.properties";
     private static final Pattern SEMANTIC_VERSION = Pattern.compile(
             "(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)");
@@ -31,6 +42,14 @@ public final class KlibPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
         project.getPluginManager().apply(JavaPlugin.class);
+        project.getPluginManager().apply("org.jetbrains.kotlin.jvm");
+        JavaPluginExtension javaExtension = project.getExtensions().getByType(JavaPluginExtension.class);
+        javaExtension.setSourceCompatibility(JavaVersion.VERSION_1_8);
+        javaExtension.setTargetCompatibility(JavaVersion.VERSION_1_8);
+        project.getTasks().withType(KotlinJvmCompile.class).configureEach(task -> {
+            task.getCompilerOptions().getJvmTarget().set(JvmTarget.JVM_1_8);
+            task.getCompilerOptions().getFreeCompilerArgs().add("-Xjdk-release=8");
+        });
         project.getTasks().withType(JavaCompile.class).configureEach(
                 task -> task.getOptions().getRelease().set(8));
         KlibExtension extension = project.getExtensions().create(
@@ -61,9 +80,26 @@ public final class KlibPlugin implements Plugin<Project> {
                             "Resolved dependencies embedded in the final Klib JAR.");
                     configuration.extendsFrom(embedded);
                     excludeHostProvided(configuration);
+                    configuration.getAttributes()
+                            .attribute(Usage.USAGE_ATTRIBUTE,
+                                    project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME))
+                            .attribute(Category.CATEGORY_ATTRIBUTE,
+                                    project.getObjects().named(Category.class, Category.LIBRARY))
+                            .attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                                    project.getObjects().named(LibraryElements.class, LibraryElements.JAR))
+                            .attribute(Bundling.BUNDLING_ATTRIBUTE,
+                                    project.getObjects().named(Bundling.class, Bundling.EXTERNAL))
+                            .attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 8)
+                            .attribute(KotlinPlatformType.Companion.getAttribute(), KotlinPlatformType.jvm);
                 });
-        project.getConfigurations().getByName(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME)
+        project.getConfigurations().getByName(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME)
                 .extendsFrom(embedded);
+        // 选择版本可以参考完整 runtime 图，但只从 embedded 根解析打包闭包。
+        Configuration runtimeClasspath = project.getConfigurations().getByName(
+                JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME);
+        embeddedClasspath.shouldResolveConsistentlyWith(runtimeClasspath);
+        project.getConfigurations().getByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME)
+                .shouldResolveConsistentlyWith(runtimeClasspath);
         project.getConfigurations().getByName(
                         JavaPlugin.TEST_IMPLEMENTATION_CONFIGURATION_NAME)
                 .extendsFrom(embedded);
@@ -236,6 +272,7 @@ public final class KlibPlugin implements Plugin<Project> {
                     task.getBaseJar().set(interopJar.flatMap(
                             PrepareKetherInteropJarTask::getArchiveFile));
                     task.getLibraries().from(embeddedClasspath);
+                    task.getGuardProduct().set(extension.getGuardProductConfigured());
                     task.getProtectedRelocationPrefixes().convention(
                             Collections.<String>emptyList());
                     task.getArchiveFile().set(project.getLayout().getBuildDirectory().file(
@@ -382,6 +419,10 @@ public final class KlibPlugin implements Plugin<Project> {
             project.getDependencies().add(
                     embedded.getName(),
                     dependency);
+        }
+        if (!extension.getExternalLibraries().get().containsKey("kotlin")) {
+            project.getDependencies().add(embedded.getName(),
+                    "org.jetbrains.kotlin:kotlin-stdlib:" + KOTLIN_VERSION);
         }
         Map<String, String> relocations = new LinkedHashMap<String, String>(plan.relocations());
         java.util.List<String> protectedPrefixes = new java.util.ArrayList<String>(plan.protectedPrefixes());

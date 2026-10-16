@@ -2,12 +2,13 @@
 
 [中文文档](docs/README.zh-CN.md) | [English documentation](docs/README.md)
 
-Gradle build integration for Java 8 Bukkit/Paper plugins and KlibGuard cloud products.
+Gradle build integration with default Kotlin/JVM 2.4.21 and Java 8 output for Bukkit/Paper plugins and KlibGuard cloud products.
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.6.1"
+    id("me.kzheart.klib") version "0.7.0"
 }
+repositories { mavenCentral() }
 
 klib {
     main("com.example.plugin.ExamplePlugin")
@@ -19,16 +20,20 @@ klib {
 }
 ```
 
-For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.8.0`
+For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.18.0`
 modules, and builds a relocated `-all.jar`. For KlibGuard products, `guardProduct {}` generates the
 cloud entrypoint, keeps Guard/Core parent-provided, selectively relocates private modules, and
 builds a Collector-validated `-guard.jar`. Guard products may also use `ketherInterop(true)` to
 declare the portal-brokered Kether protocol without adding a Bukkit main class or `plugin.yml`.
-Only dependencies declared in `klibEmbedded` enter the final JAR; ordinary `implementation` and
+The selected Klib modules and Kotlin stdlib are explicit embedded roots. Only their runtime closure
+and dependencies declared in `klibEmbedded` enter the final JAR; ordinary `implementation` and
 `runtimeOnly` dependencies are never bundled implicitly.
 
-Version 0.6.1 fixes single-segment package relocation, including `relocate("kotlin", "kotlin")`.
-Declare the Kotlin standard library in `klibEmbedded` when your plugin must bundle it.
+Kotlin and Java sources compile together by default. Kotlin runtime namespaces, structured metadata,
+module indexes, and builtins are relocated below `targetPackage.libs`; multi-release resources are
+preserved. Reflection adapters are verified against official kotlin-reflect 2.4.21; unsupported
+versions/shapes fail. Guard rejects statically visible parent-API calls with private Kotlin types,
+while Java host signatures and internal stdlib use remain supported. See [runtime packaging and its limits](docs/gradle-plugin.en.md).
 
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 

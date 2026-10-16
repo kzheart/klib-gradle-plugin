@@ -56,7 +56,7 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.12.2-R0.1-20180712.012057-156") {
         isTransitive = false
     }
-    // Only dependencies explicitly declared here enter the final JAR.
+    // Additional embedded roots; Kotlin stdlib and selected Klib modules are already included.
     // klibEmbedded("com.example:private-library:1.0.0")
 }
 ```
@@ -158,8 +158,11 @@ IDE completion is available because module names are methods rather than strings
 
 ## Packaging
 
-The plugin packages automatically selected Klib modules and third-party dependencies declared in
-`klibEmbedded`. Dependencies in `implementation`, `runtimeOnly`, and `compileOnly` are never bundled
+See [native Kotlin packaging](gradle-plugin.en.md) for mixed sources, metadata, isolation limits,
+multi-release resources, and external Kotlin runtime mode.
+
+The plugin automatically applies Kotlin/JVM 2.4.21 and packages Kotlin stdlib, selected Klib
+modules, and the runtime closure of dependencies declared in `klibEmbedded`. Dependencies in `implementation`, `runtimeOnly`, and `compileOnly` are never bundled
 implicitly:
 
 ```kotlin

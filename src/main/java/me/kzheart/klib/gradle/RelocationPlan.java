@@ -53,6 +53,8 @@ public final class RelocationPlan {
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
         mappings.put("org.postgresql", libraries + ".postgresql");
+        mappings.put("kotlin", libraries + ".kotlin");
+        mappings.put("kotlinx.coroutines", libraries + ".kotlinx.coroutines");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
             String source = relocation.getKey() == null ? "" : relocation.getKey().trim();
             String suffix = relocation.getValue() == null ? "" : relocation.getValue().trim();
@@ -103,6 +105,8 @@ public final class RelocationPlan {
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
         mappings.put("org.postgresql", libraries + ".postgresql");
+        mappings.put("kotlin", libraries + ".kotlin");
+        mappings.put("kotlinx.coroutines", libraries + ".kotlinx.coroutines");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
             String source = relocation.getKey() == null ? "" : relocation.getKey().trim();
             String suffix = relocation.getValue() == null ? "" : relocation.getValue().trim();

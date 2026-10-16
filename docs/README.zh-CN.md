@@ -150,7 +150,10 @@ OpenContainer 身份由支持 `klib-guard-kether-interop-v1` 的 KlibGuard 门�
 
 ## 打包
 
-插件只打包 Klib 自动选择的模块，以及显式声明在 `klibEmbedded` 中的第三方依赖。
+混合源码、metadata、隔离边界、multi-release 资源与外部 Kotlin 模式见[原生 Kotlin 打包](gradle-plugin.md)。
+
+插件默认应用 Kotlin/JVM 2.4.21，打包 Kotlin stdlib、自动选择的 Klib 模块，以及
+`klibEmbedded` 显式根的 runtime 传递闭包。
 `implementation`、`runtimeOnly` 和 `compileOnly` 都不会被隐式打入最终 JAR：
 
 ```kotlin

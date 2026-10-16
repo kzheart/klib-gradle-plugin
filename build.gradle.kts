@@ -43,7 +43,9 @@ java {
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(8)
     options.encoding = "UTF-8"
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-options", "-Werror"))
+    // ASM uses Java 9 @Deprecated attributes; --release 8 cannot resolve those annotation members.
+    // Keep source warnings fatal, while excluding warnings in dependency class files.
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-options", "-Xlint:-classfile", "-Werror"))
 }
 
 tasks.withType<Javadoc>().configureEach {
@@ -53,6 +55,11 @@ tasks.withType<Javadoc>().configureEach {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Keep TestKit downloads on the same explicitly configured network/trust route as this build.
+    listOf("http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort",
+        "javax.net.ssl.trustStore").forEach { key ->
+        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+    }
     testLogging {
         events("failed", "skipped")
         exceptionFormat = TestExceptionFormat.FULL
@@ -103,6 +110,10 @@ gradlePlugin {
 
 dependencies {
     implementation(gradleApi())
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
+    implementation("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.21")
+    implementation("org.ow2.asm:asm:9.9.1")
+    implementation("org.ow2.asm:asm-commons:9.9.1")
     testImplementation(gradleTestKit())
     testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")

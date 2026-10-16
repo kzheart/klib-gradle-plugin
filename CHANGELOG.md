@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Apply Kotlin/JVM 2.4.21 by default, compile mixed Kotlin/Java sources for Java 8, and embed the stdlib as an explicit runtime root
+- Align embedded and compile versions with runtime resolution while keeping unrelated dependencies outside the bundle
+- Relocate Kotlin metadata, module/builtins resources, and coroutine namespaces structurally; preserve member identifiers and multi-release resources
+- Support the single-root `kotlin` package in `externalLibrary`; document runtime compatibility and existing Guard limits
+
+- Add verified kotlin-reflect 2.4.21 package-root adapters and fail early on statically visible Guard parent-API signatures containing private Kotlin types
+
 ## 0.7.0 (2026-10-11)
 
 - Add `externalLibrary(coordinate, sourcePackage)` for Bukkit/Paper runtime libraries, excluding external artifacts from shading and preserving original package names.

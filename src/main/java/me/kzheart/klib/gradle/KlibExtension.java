@@ -96,7 +96,7 @@ public class KlibExtension {
     public void externalLibrary(String coordinate, String sourcePackage) {
         if (coordinate == null || !coordinate.matches("[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+")
                 || coordinate.contains("SNAPSHOT") || sourcePackage == null
-                || !sourcePackage.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)+")) {
+                || !sourcePackage.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*")) {
             throw new org.gradle.api.GradleException("externalLibrary requires a fixed group:artifact:version and package");
         }
         externalLibraries.put(sourcePackage, coordinate);
