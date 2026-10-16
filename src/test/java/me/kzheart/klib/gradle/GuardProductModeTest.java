@@ -141,6 +141,72 @@ class GuardProductModeTest {
     }
 
     @Test
+    void rejectsAnActualKotlinHostOverrideThroughALocalIntermediateWithoutAHostCall() throws Exception {
+        Path stdlib = java.nio.file.Paths.get(kotlin.Unit.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI());
+        publishClassModule("klib-host-kotlin-api", "1.0",
+                "me.kzheart.klib.scope.HostKotlinBoundary",
+                "package me.kzheart.klib.scope; public interface HostKotlinBoundary { "
+                        + "void accept(kotlin.jvm.functions.Function0<kotlin.Unit> action); }",
+                Collections.singletonList(stdlib), "");
+        writeGuardProject(false, false);
+        Files.write(projectDirectory.resolve("build.gradle.kts"),
+                "\ndependencies { compileOnly(\"me.kzheart.klib:klib-host-kotlin-api:1.0\") }\n"
+                        .getBytes(StandardCharsets.UTF_8), java.nio.file.StandardOpenOption.APPEND);
+        Path source = projectDirectory.resolve("src/main/kotlin/com/example/Boundary.kt");
+        Files.createDirectories(source.getParent());
+        Files.write(source, ("package com.example\n"
+                + "abstract class LocalBoundary : me.kzheart.klib.scope.HostKotlinBoundary\n"
+                + "class Boundary : LocalBoundary() {\n"
+                + "  override fun accept(action: () -> Unit) { action() }\n"
+                + "}\n").getBytes(StandardCharsets.UTF_8));
+        Path stale = projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar");
+        Files.createDirectories(stale.getParent());
+        Files.write(stale, new byte[]{1, 2, 3});
+
+        BuildResult result = GradleFixture.buildAndFail(projectDirectory, "guardProductJar");
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":compileKotlin").getOutcome());
+        assertTrue(result.getOutput().contains("Unsupported Guard Kotlin parent boundary"), result.getOutput());
+        assertTrue(result.getOutput().contains("overrides me.kzheart.klib.scope.HostKotlinBoundary.accept"),
+                result.getOutput());
+        assertFalse(Files.exists(stale));
+    }
+
+    @Test
+    void permitsAnInternalKotlinMethodOnAJavaOnlyHostSubclass() throws Exception {
+        writeGuardProject(false, false);
+        Files.delete(projectDirectory.resolve("src/main/java/com/example/CloudExample.java"));
+        Path source = projectDirectory.resolve("src/main/kotlin/com/example/CloudExample.kt");
+        Files.createDirectories(source.getParent());
+        Files.write(source, ("package com.example\n"
+                + "class CloudExample : me.kzheart.klib.guard.KlibCloudPlugin() {\n"
+                + "  override fun setup(root: me.kzheart.klib.scope.Scope) { }\n"
+                + "  fun internalOnly(action: () -> Unit) { action() }\n"
+                + "}\n").getBytes(StandardCharsets.UTF_8));
+
+        BuildResult result = GradleFixture.build(projectDirectory, "guardProductJar");
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":verifyGuardProductJar").getOutcome());
+        try (ZipFile jar = outputJar()) {
+            assertNotNull(jar.getEntry("com/example/CloudExample.class"));
+            assertNotNull(jar.getEntry("com/example/libs/kotlin/Unit.class"));
+            org.objectweb.asm.ClassReader reader = new org.objectweb.asm.ClassReader(
+                    read(jar, jar.getEntry("com/example/CloudExample.class")));
+            java.util.Map<String, String> methods = new java.util.LinkedHashMap<String, String>();
+            reader.accept(new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                @Override public org.objectweb.asm.MethodVisitor visitMethod(
+                        int access, String name, String descriptor, String signature, String[] exceptions) {
+                    methods.put(name, descriptor);
+                    return null;
+                }
+            }, org.objectweb.asm.ClassReader.SKIP_CODE);
+            assertEquals("(Lcom/example/libs/kotlin/jvm/functions/Function0;)V", methods.get("internalOnly"));
+            assertEquals("(Lme/kzheart/klib/scope/Scope;)V", methods.get("setup"));
+        }
+    }
+
+    @Test
     void collectorBoundaryRejectsUserSuppliedPluginYaml() throws Exception {
         writeGuardProject(true, false);
         Path stale = projectDirectory.resolve("build/libs/fixture-1.2.3-guard.jar");

@@ -32,7 +32,7 @@ and dependencies declared in `klibEmbedded` enter the final JAR; ordinary `imple
 Kotlin and Java sources compile together by default. Kotlin runtime namespaces, structured metadata,
 module indexes, and builtins are relocated below `targetPackage.libs`; multi-release resources are
 preserved. Reflection adapters are verified against official kotlin-reflect 2.4.21; unsupported
-versions/shapes fail. Guard rejects statically visible parent-API calls with private Kotlin types,
+versions/shapes fail. Guard rejects statically visible parent-API calls and overrides with private Kotlin types,
 while Java host signatures and internal stdlib use remain supported. See [runtime packaging and its limits](docs/gradle-plugin.en.md).
 
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.

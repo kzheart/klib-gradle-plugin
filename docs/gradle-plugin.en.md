@@ -44,10 +44,13 @@ not a guarantee for every reflective third-party library. Relocation cannot auto
 arbitrary names stored in opaque binary resources, native code, or external configuration.
 Do not expose plugin-private relocated Kotlin types through shared host/plugin APIs. Guard's
 parent-provided APIs remain protected; their supported Kotlin types must be agreed with the host.
-A Guard build fails early when a statically visible call, field access, or method handle to a
-parent-owned Klib member contains a privately relocated Kotlin/coroutine type in its JVM descriptor.
+A Guard build fails early when a statically visible call, field access, method handle, or actual
+override/implementation of a parent-owned Klib member contains a privately relocated Kotlin/coroutine
+type in its JVM descriptor. Guard inspects class headers on the product/compile classpath to match
+inherited method names and descriptors, including local intermediate classes and interfaces.
 Java-only host signatures and Kotlin code using only its internal stdlib remain supported. This
-check does not prove safety for erased `Object` values, dynamic reflection, or third-party APIs.
+check does not prove safety for erased `Object` values, dynamically generated implementations
+(such as proxies or SAM implementations), reflection, or third-party APIs.
 The current Guard collector still rejects multi-release entries and archives above 4096 entries:
 Kotlin reflect 2.4.21 has a Java 9 resource-loader overlay, and stdlib + reflect + coroutines already
 exceed that entry budget. Those Guard combinations therefore fail validation; this release does not

@@ -398,6 +398,8 @@ public final class KlibPlugin implements Plugin<Project> {
                         extension.getRelocations().get());
 
         if (guardProduct) {
+            candidateJar.configure(task -> task.getGuardBoundaryClasspath().from(
+                    project.getConfigurations().getByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME)));
             String guardApiVersion = extension.getGuardProduct()
                     .getGuardApiVersion().get().trim();
             requireSemanticVersion("klib.guardProduct.guardApiVersion", guardApiVersion);

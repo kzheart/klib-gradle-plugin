@@ -54,6 +54,11 @@ public abstract class KlibShadeJarTask extends DefaultTask {
     @Classpath
     public abstract ConfigurableFileCollection getLibraries();
 
+    @Classpath
+    public abstract ConfigurableFileCollection getGuardBoundaryClasspath();
+
+    private GuardKotlinBoundaryVerifier.Hierarchy guardBoundaryHierarchy;
+
     @Input
     public abstract MapProperty<String, String> getRelocations();
 
@@ -72,10 +77,13 @@ public abstract class KlibShadeJarTask extends DefaultTask {
         ReadBudget budget = new ReadBudget();
         File base = getBaseJar().get().getAsFile();
         rejectConsumerNamespaceCollisions(base, getRelocations().get());
-        readArchive(base, false, true, entries, budget);
-
         List<File> libraries = new ArrayList<File>(getLibraries().getFiles());
         Collections.sort(libraries, Comparator.comparing(File::getAbsolutePath));
+        if (getGuardProduct().getOrElse(false)) {
+            guardBoundaryHierarchy = GuardKotlinBoundaryVerifier.Hierarchy.fromClasspath(
+                    base, libraries, getGuardBoundaryClasspath().getFiles());
+        }
+        readArchive(base, false, true, entries, budget);
         for (File library : libraries) {
             if (library.equals(base)) {
                 continue;
@@ -216,7 +224,8 @@ public abstract class KlibShadeJarTask extends DefaultTask {
         try {
             if (relocateContent && originalName.endsWith(".class")) {
                 if (getGuardProduct().getOrElse(false)) {
-                    GuardKotlinBoundaryVerifier.verify(originalContent, relocations, protectedPrefixes);
+                    GuardKotlinBoundaryVerifier.verify(
+                            originalContent, relocations, protectedPrefixes, guardBoundaryHierarchy);
                 }
                 content = ClassRelocator.relocate(
                         originalContent,
