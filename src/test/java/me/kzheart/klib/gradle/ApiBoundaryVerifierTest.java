@@ -62,6 +62,28 @@ class ApiBoundaryVerifierTest {
         Metadata metadata = new KotlinClassMetadata.Class(node, new JvmMetadataVersion(2, 4, 0), 0).write();
         reject(w -> metadata(w, metadata));
     }
+    @Test void markerExceptionIsRestrictedToAnnotationDescriptors() {
+        for (String marker : Arrays.asList("kotlin/Metadata", "org/jetbrains/annotations/NotNull", "javax/annotation/Nullable")) {
+            reject(w -> w.visitField(1, "value", "L" + marker + ";", null, null).visitEnd());
+            reject(w -> w.visitMethod(1025, "value", "()L" + marker + ";", null, null).visitEnd());
+            reject(w -> w.visitMethod(1025, "value", "(L" + marker + ";)V", null, null).visitEnd());
+            reject(w -> w.visitField(1, "value", "Ljava/util/List;", "Ljava/util/List<L" + marker + ";>;", null).visitEnd());
+            reject(w -> code(w).visitMethodInsn(Opcodes.INVOKESTATIC, marker, "value", "()V", false));
+            reject(w -> code(w).visitLdcInsn(Type.getObjectType(marker)));
+            reject(w -> { AnnotationVisitor a=w.visitAnnotation("Lexample/api/Marker;", true); a.visit("type", Type.getObjectType(marker)); a.visitEnd(); });
+            reject(w -> { AnnotationVisitor a=w.visitAnnotation("Lexample/api/Marker;", true); a.visitEnum("value", "L" + marker + ";", "ONE"); a.visitEnd(); });
+        }
+        KmClass node = new KmClass(); node.setName("example/api/Api"); node.getSupertypes().add(type("kotlin/Any"));
+        Metadata m = new KotlinClassMetadata.Class(node, new JvmMetadataVersion(2, 4, 0), 0).write();
+        assertDoesNotThrow(() -> verifier.verify(bytes(w -> {
+            metadata(w, m);
+            w.visitField(1, "value", "Ljava/lang/String;", null, null).visitAnnotation("Lorg/jetbrains/annotations/NotNull;", false).visitEnd();
+            MethodVisitor method=w.visitMethod(1025, "value", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+            method.visitParameterAnnotation(0, "Lorg/jetbrains/annotations/Nullable;", false).visitEnd();
+            method.visitTypeAnnotation(TypeReference.newTypeReference(TypeReference.METHOD_RETURN).getValue(), null, "Ljavax/annotation/Nullable;", true).visitEnd();
+            method.visitEnd();
+        }), "example/api/Api.class"));
+    }
     private void reject(Consumer<ClassWriter> mutation) { assertThrows(GradleException.class, () -> verifier.verify(bytes(mutation), "example/api/Api.class")); }
     private static MethodVisitor code(ClassWriter writer) { MethodVisitor method = writer.visitMethod(9, "run", "()V", null, null); method.visitCode(); method.visitInsn(Opcodes.NOP); return method; }
     private static byte[] bytes(Consumer<ClassWriter> mutation) {

@@ -124,7 +124,8 @@ The Java component exposes the verified main artifact. Source/Javadoc archives a
 API archives are not relocated. References may only target declared API packages, JDK, and agreed host types (Bukkit/Paper/Adventure by default); Kotlin runtimes, coroutines, KLib, and other implementation types are rejected.
 The API host allowlist is independent of packaging exclusions. Append with `api { hostPackages("org.example.host") }`; Paper-provided Gson/SnakeYAML are not automatically allowed API types.
 ASM inspects inheritance, descriptors, generic signatures, throws, annotation values, records, and full code including handles, invokedynamic, recursive constant-dynamic, frames, and locals.
-Only `kotlin.Metadata` and necessary nullability annotations are exceptions. Structured metadata permits JVM-mapped Kotlin builtins; it does not permit function types, `Intrinsics`, or `DefaultConstructorMarker`.
+The `kotlin.Metadata` and necessary nullability exceptions apply only to actual annotation descriptors. Fields, parameters, returns, generics, code, and annotation class/enum values use the ordinary reference policy.
+Structured metadata uses the matching Kotlin metadata library’s JVM mapping and official stdlib typealias declarations, accepting only JDK/primitive mappings. `Cloneable`, `Comparator`, `Appendable`, and `RandomAccess` are supported; actual Kotlin runtime types such as `Pair`, `Result`, functions, `Intrinsics`, `DefaultConstructorMarker`, and coroutines remain forbidden.
 Pure Kotlin interfaces can pass. Classes with default arguments or executable Kotlin code may generate runtime references and should remain implementation details.
 
 API `.kotlin_module` files must reference API types only; use a separate API source set when a shared module index also lists implementations.

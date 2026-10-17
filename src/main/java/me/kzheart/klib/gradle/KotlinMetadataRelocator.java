@@ -128,6 +128,14 @@ final class KotlinMetadataRelocator {
 
     /** API 检查复用同一结构化遍历；不重写、不信任 d1/d2 普通字符串搜索。 */
     static void verifyApi(byte[] source, java.util.function.Consumer<String> referenceCheck) {
+        KotlinClassMetadata metadata = readMetadata(source);
+        if (metadata == null) return;
+        KotlinMetadataRelocator visitor = new KotlinMetadataRelocator(Collections.emptyMap(), Collections.emptyList());
+        visitor.referenceCheck = referenceCheck;
+        visitor.rewrite(metadata);
+    }
+
+    static KotlinClassMetadata readMetadata(byte[] source) {
         final MetadataFields[] fields = new MetadataFields[1];
         new ClassReader(source).accept(new ClassVisitor(Opcodes.ASM9) {
             @Override public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
@@ -136,12 +144,10 @@ final class KotlinMetadataRelocator {
                 fields[0] = new MetadataFields(); return fields[0];
             }
         }, 0);
-        if (fields[0] == null) return;
+        if (fields[0] == null) return null;
         Metadata metadata = fields[0].metadata();
         validateVersion(metadata.mv()); validateClassPayload(metadata);
-        KotlinMetadataRelocator visitor = new KotlinMetadataRelocator(Collections.emptyMap(), Collections.emptyList());
-        visitor.referenceCheck = referenceCheck;
-        visitor.rewrite(KotlinClassMetadata.readStrict(metadata));
+        return KotlinClassMetadata.readStrict(metadata);
     }
 
     static final class PreparedClass {

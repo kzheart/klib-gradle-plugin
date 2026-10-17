@@ -108,7 +108,8 @@ Java component 的 outgoing artifact 指向验证后的主包。源码/Javadoc �
 API 不做重定位；只允许声明包、JDK 与约定宿主类型（默认 Bukkit/Paper/Adventure），禁止 Kotlin 运行时、协程、KLib及其他实现类型。
 API 宿主白名单独立于打包排除规则，可用 `api { hostPackages("org.example.host") }` 追加；Gson/SnakeYAML 不会因 Paper 提供而自动成为 API 类型。
 检查父类/接口、字段/方法、泛型、throws、注解及其值、record，以及完整方法体（含 handle、indy、递归 condy、局部变量和帧）。
-只放行 `kotlin.Metadata` 与必要空值注解；Metadata 结构化检查中的 JVM 映射内建类型单独放行，函数类型、`Intrinsics`、`DefaultConstructorMarker` 等仍拒绝。
+只有真正的注解描述符位置放行 `kotlin.Metadata` 与必要空值标记；作为字段、参数、返回、泛型、代码或注解 class/enum 值时均走普通类型检查。
+Metadata 结构化检查复用配套 Kotlin metadata 库的 JVM 映射与 stdlib 正式 typealias 声明，仅接受映射到 JDK/基本类型的声明，`Cloneable`、`Comparator`、`Appendable`、`RandomAccess` 等 JVM 映射可用，`Pair`、`Result`、函数类型、`Intrinsics`、`DefaultConstructorMarker` 与协程等实际运行时类型仍拒绝。
 Kotlin 纯接口可以通过；含默认参数或运行时代码的类可能生成上述依赖，应把实现放在插件内部。
 
 API 的 `.kotlin_module` 也要只引用本 API；混合实现的 module 索引会失败，宜使用独立 API source set。
