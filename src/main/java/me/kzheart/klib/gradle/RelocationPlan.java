@@ -53,6 +53,11 @@ public final class RelocationPlan {
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
         mappings.put("org.postgresql", libraries + ".postgresql");
+        if (modules.resolved().contains(KlibModule.DATA_POOL)) {
+            mappings.put("org.apache.commons.dbcp2", libraries + ".dbcp2");
+            mappings.put("org.apache.commons.pool2", libraries + ".pool2");
+            mappings.put("org.apache.commons.logging", libraries + ".commonslogging");
+        }
         mappings.put("kotlin", libraries + ".kotlin");
         mappings.put("kotlinx.coroutines", libraries + ".kotlinx.coroutines");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
@@ -105,6 +110,11 @@ public final class RelocationPlan {
         mappings.put("com.cryptomorin.xseries", libraries + ".xseries");
         mappings.put("org.sqlite", libraries + ".sqlite");
         mappings.put("org.postgresql", libraries + ".postgresql");
+        if (modules.resolved().contains(KlibModule.DATA_POOL)) {
+            mappings.put("org.apache.commons.dbcp2", libraries + ".dbcp2");
+            mappings.put("org.apache.commons.pool2", libraries + ".pool2");
+            mappings.put("org.apache.commons.logging", libraries + ".commonslogging");
+        }
         mappings.put("kotlin", libraries + ".kotlin");
         mappings.put("kotlinx.coroutines", libraries + ".kotlinx.coroutines");
         for (Map.Entry<String, String> relocation : customRelocations.entrySet()) {
@@ -151,6 +161,7 @@ public final class RelocationPlan {
             case DATA:
             case DATA_JSON:
             case DATA_JDBC:
+            case DATA_POOL:
             case DATA_SQLITE:
             case DATA_MYSQL:
             case DATA_POSTGRESQL:

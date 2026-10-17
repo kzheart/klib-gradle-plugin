@@ -19,6 +19,7 @@ public enum KlibModule {
     DATA("data", CORE),
     DATA_JSON("data-json", DATA),
     DATA_JDBC("data-jdbc", DATA),
+    DATA_POOL("data-pool", DATA_JDBC),
     DATA_SQLITE("data-sqlite", DATA_JDBC),
     DATA_MYSQL("data-mysql", DATA_JDBC),
     DATA_POSTGRESQL("data-postgresql", DATA_JDBC),

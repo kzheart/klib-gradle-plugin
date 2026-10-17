@@ -29,6 +29,7 @@ class ModuleGraphConsistencyTest {
         expected.put("data", Collections.singletonList("core"));
         expected.put("data-json", Collections.singletonList("data"));
         expected.put("data-jdbc", Collections.singletonList("data"));
+        expected.put("data-pool", Collections.singletonList("data-jdbc"));
         expected.put("data-sqlite", Collections.singletonList("data-jdbc"));
         expected.put("data-mysql", Collections.singletonList("data-jdbc"));
         expected.put("data-postgresql", Collections.singletonList("data-jdbc"));

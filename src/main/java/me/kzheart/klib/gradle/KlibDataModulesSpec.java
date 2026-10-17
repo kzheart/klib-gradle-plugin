@@ -18,6 +18,8 @@ public final class KlibDataModulesSpec {
         selected.add(KlibModule.DATA_JDBC);
     }
 
+    public void pool() { selected.add(KlibModule.DATA_POOL); }
+
     public void sqlite() {
         selected.add(KlibModule.DATA_SQLITE);
     }
