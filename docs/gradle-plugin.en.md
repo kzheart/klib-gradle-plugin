@@ -117,7 +117,8 @@ Paper also rejects library `plugin.yml` entries; generic mode keeps ignoring lib
 `api.archive(Object provider)` accepts one raw API JAR file provider, with explicit `api.packages(String...)`.
 Jar producers move into `build/intermediates/klib/api/<task>/`; successful validation promotes the candidate to `build/libs/<name>-<version>-api.jar`.
 Direct input files must live outside `build/libs`. Maven publications automatically attach the verified `api` classifier; do not attach the raw API archive again.
-Failed validation removes previous local final outputs and never promotes candidates. It does not remove versions already published remotely.
+Java/Kotlin compilation, resource processing, and declared API producers depend on removal of the plugin-owned current main/API final outputs.
+Failures in these steps leave no previous owned final JAR; successful incremental builds revalidate and restore outputs. Other user JARs are preserved. Failed validation never promotes candidates. It does not remove versions already published remotely.
 
 `verifyKlibJar`, `verifyKlibApiJar`, and existing Guard verification gate `check`, final archives, and Maven publication.
 The Java component exposes the verified main artifact. Source/Javadoc archives are not API binary inputs.

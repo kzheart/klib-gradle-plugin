@@ -253,6 +253,11 @@ public final class KlibPlugin implements Plugin<Project> {
                     task.delete(finalArchive);
                 });
 
+        // 清理是编译/资源处理的前置条件，不能仅与它们并列依赖候选任务。
+        project.getTasks().withType(JavaCompile.class).configureEach(task -> task.dependsOn(prepareArchive));
+        project.getTasks().withType(KotlinJvmCompile.class).configureEach(task -> task.dependsOn(prepareArchive));
+        project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME).configure(task -> task.dependsOn(prepareArchive));
+
         TaskProvider<KlibShadeJarTask> candidateJar = project.getTasks().register(
                 "assembleKlibCandidate",
                 KlibShadeJarTask.class,
@@ -359,6 +364,7 @@ public final class KlibPlugin implements Plugin<Project> {
                     throw new org.gradle.api.GradleException("klib.api.archive requires one API candidate JAR");
                 // 声明的 Jar producer 统一移到候选目录，不能在验证前写入 build/libs。
                 for (org.gradle.api.Task producer : extension.getApi().getArchives().getBuildDependencies().getDependencies(null)) {
+                    producer.dependsOn(prepareArchive);
                     if (producer instanceof Jar) ((Jar) producer).getDestinationDirectory().set(
                             project.getLayout().getBuildDirectory().dir("intermediates/klib/api/" + producer.getName()));
                 }

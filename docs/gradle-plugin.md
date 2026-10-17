@@ -101,7 +101,8 @@ Paper 模式还拒绝依赖携带的 `plugin.yml`；通用模式继续忽略依�
 `api.archive(Object provider)` 接受一个原始 API JAR 的文件 provider；`api.packages(String...)` 是其明确包白名单。
 Jar producer 自动移到 `build/intermediates/klib/api/<task>/`，通过验证后晋升为 `build/libs/<name>-<version>-api.jar`。
 直接传入文件时，文件必须位于 `build/libs` 外。声明 API 后，Maven publications 自动附加已验证的 `api` classifier；不要重复附加原始 API 包。
-主包、API 包与 Maven 发布均经过门禁；失败会移除上次正式产物，不会晋升候选包。远端已有版本不会被本地失败删除。
+主包、API 包与 Maven 发布均经过门禁；主代码的 Java/Kotlin 编译、资源处理和声明的 API producer 均先执行清理，只删除本插件当前拥有的正式主包/API 包。
+这些构建步骤失败也不会留下上次正式产物；成功的增量构建会重新验证并恢复正式包，不清理其他用户 JAR。失败不会晋升候选包。远端已有版本不会被本地失败删除。
 
 `verifyKlibJar`、`verifyKlibApiJar` 和现有 Guard 验证接入 `check`、正式包与 Maven 发布。
 Java component 的 outgoing artifact 指向验证后的主包。源码/Javadoc 包不属于 API 二进制检查对象。

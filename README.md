@@ -48,7 +48,7 @@ Select PostgreSQL with `modules { data { postgresql() } }`, or MySQL with `data 
 Paper projects can opt into `klib { packaging { paper() } }`: known host dependencies on KLib module edges remain compile-visible and are excluded from the embedded closure; explicit host inputs and host relocation rules are rejected.
 Declare a shared API using `api { archive(apiJar.flatMap { it.archiveFile }); packages("com.example.api") }`;
 `check`, final archives, and Maven publication verify its full bytecode and Kotlin metadata boundary.
-Candidates only become final JARs after validation. See [Paper and API rules](docs/gradle-plugin.en.md#paper-host-and-shared-api-gates).
+Candidates only become final JARs after validation. Previous owned final JARs are cleared before compilation and API producers, including failed builds. See [Paper and API rules](docs/gradle-plugin.en.md#paper-host-and-shared-api-gates).
 
 `modules { data { pool() } }` adds the optional DBCP2 pool with isolated transitive dependencies; JDBC and drivers remain pool-free unless selected.
 Consumer JVM targets are independent: `jvmTarget(25)` plus a Java 25 toolchain leaves KLib and this plugin on Java 8.
