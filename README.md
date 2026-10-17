@@ -6,7 +6,7 @@ Gradle build integration with default Kotlin/JVM 2.4.21 and Java 8 output for Bu
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.7.0"
+    id("me.kzheart.klib") version "0.8.0"
 }
 repositories { mavenCentral() }
 
@@ -20,7 +20,7 @@ klib {
 }
 ```
 
-For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.18.0`
+For ordinary Bukkit plugins, the plugin generates `plugin.yml`, resolves selected Klib `0.19.0`
 modules, and builds a relocated `-all.jar`. For KlibGuard products, `guardProduct {}` generates the
 cloud entrypoint, keeps Guard/Core parent-provided, selectively relocates private modules, and
 builds a Collector-validated `-guard.jar`. Guard products may also use `ketherInterop(true)` to

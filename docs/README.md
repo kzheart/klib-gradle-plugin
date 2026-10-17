@@ -1,8 +1,8 @@
 # Klib Gradle Plugin
 
 Plugin ID: `me.kzheart.klib`
-Plugin version: `0.6.1`
-Bundled Klib library version: `0.8.0`
+Plugin version: `0.8.0`
+Bundled Klib library version: `0.19.0`
 Bundled Guard API version: `0.2.0`
 
 The plugin supports two mutually exclusive artifacts: ordinary Java 8 Bukkit/Paper plugins and
@@ -24,8 +24,6 @@ dependencyResolutionManagement {
     repositories {
         mavenCentral()
         maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
-        // Required only when item() or ui() is selected.
-        maven("https://repo.codemc.io/repository/maven-public/")
     }
 }
 ```
@@ -33,7 +31,7 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("me.kzheart.klib") version "0.6.1"
+    id("me.kzheart.klib") version "0.8.0"
 }
 
 group = "com.example"
@@ -62,7 +60,7 @@ dependencies {
 ```
 
 Do not manually add Klib `implementation(...)` dependencies when using `modules {}`. The plugin
-adds `me.kzheart.klib:klib-<module>:0.8.0` and its dependency closure from Maven Central.
+adds `me.kzheart.klib:klib-<module>:0.19.0` and its dependency closure from Maven Central.
 
 ## KlibGuard cloud products
 
@@ -70,7 +68,7 @@ A cloud product has no Bukkit main class and must not contain `plugin.yml`:
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.6.1"
+    id("me.kzheart.klib") version "0.8.0"
 }
 
 group = "com.example"
@@ -130,7 +128,7 @@ Available methods:
 
 - `core()`, `config()`, `lang()`, `command()`;
 - `item()`, `data()`, `ui()`, `script()`, `hook()`, `remote()`;
-- `data { json(); jdbc(); sqlite(); mysql(); postgresql() }` for explicit data capabilities; plain `data()` selects
+- `data { json(); jdbc(); pool(); sqlite(); mysql(); postgresql() }` for explicit data capabilities; plain `data()` selects
   only the lightweight base module. Gson and SQLite are host-provided, while MySQL is selected only
   by `mysql()`; PostgreSQL and its relocated driver are selected by `postgresql()`;
 - `compat()`, `compatV1_12()`, `compatV1_20()`, `compatV1_21()`, `compatV26()`;
@@ -148,6 +146,9 @@ IDE completion is available because module names are methods rather than strings
 | `version(...)` | Bukkit plugin version; defaults to `project.version` |
 | `apiVersion(...)` / `noApiVersion()` | Configure or omit Bukkit `api-version` |
 | `targetPackage(...)` | Root package used for relocation |
+| `packaging { paper() }` | Opt into Paper host dependency and relocation checks |
+| `api { archive(provider); packages(...) }` | Verify and publish a separate shared API classifier |
+| `jvmTarget(25)` | Consumer target independent of Java 8 KLib/plugin artifacts |
 | `modules { ... }` | Select Klib capabilities and their dependency closure |
 | `depend(...)` / `softdepend(...)` | Generate Bukkit dependency metadata |
 | `relocate(source, suffix)` | Relocate an additional third-party package |

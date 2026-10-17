@@ -5,7 +5,7 @@
 版本的 Kotlin 编译插件；项目仓库需声明 `mavenCentral()` 或对应可信镜像。
 
 ```kotlin
-plugins { id("me.kzheart.klib") version "0.7.0" }
+plugins { id("me.kzheart.klib") version "0.8.0" }
 repositories { mavenCentral() }
 klib {
     main("com.example.MyPlugin")
