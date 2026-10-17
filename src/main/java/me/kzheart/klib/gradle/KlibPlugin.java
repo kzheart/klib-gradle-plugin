@@ -46,15 +46,16 @@ public final class KlibPlugin implements Plugin<Project> {
         JavaPluginExtension javaExtension = project.getExtensions().getByType(JavaPluginExtension.class);
         javaExtension.setSourceCompatibility(JavaVersion.VERSION_1_8);
         javaExtension.setTargetCompatibility(JavaVersion.VERSION_1_8);
-        project.getTasks().withType(KotlinJvmCompile.class).configureEach(task -> {
-            task.getCompilerOptions().getJvmTarget().set(JvmTarget.JVM_1_8);
-            task.getCompilerOptions().getFreeCompilerArgs().add("-Xjdk-release=8");
-        });
-        project.getTasks().withType(JavaCompile.class).configureEach(
-                task -> task.getOptions().getRelease().set(8));
         KlibExtension extension = project.getExtensions().create(
                 "klib", KlibExtension.class, project.getObjects());
         configureDefaults(project, extension);
+        project.getTasks().withType(KotlinJvmCompile.class).configureEach(task -> {
+            task.getCompilerOptions().getJvmTarget().set(extension.getJvmTarget().map(target ->
+                    JvmTarget.valueOf(target == 8 ? "JVM_1_8" : "JVM_" + target)));
+            task.getCompilerOptions().getFreeCompilerArgs().add(extension.getJvmTarget().map(target -> "-Xjdk-release=" + target));
+        });
+        project.getTasks().withType(JavaCompile.class).configureEach(
+                task -> task.getOptions().getRelease().set(extension.getJvmTarget()));
         // klib.main 没有合理默认值；保持惰性并统一填空串，让缺失时由任务抛出指向 DSL 的错误，
         // 而不是 Gradle 报 "no value has been specified for property 'mainClass'"。
         Provider<String> mainClass = extension.getMain().orElse("");
@@ -273,6 +274,8 @@ public final class KlibPlugin implements Plugin<Project> {
                             PrepareKetherInteropJarTask::getArchiveFile));
                     task.getLibraries().from(embeddedClasspath);
                     task.getGuardProduct().set(extension.getGuardProductConfigured());
+                    task.getPaper().set(extension.getPackaging().getPaper());
+                    task.getHostPackages().set(extension.getPackaging().getHostPackages());
                     task.getProtectedRelocationPrefixes().convention(
                             Collections.<String>emptyList());
                     task.getArchiveFile().set(project.getLayout().getBuildDirectory().file(
@@ -294,17 +297,56 @@ public final class KlibPlugin implements Plugin<Project> {
                                     candidateJar.flatMap(KlibShadeJarTask::getArchiveFile));
                         });
 
+        TaskProvider<VerifyKlibJarTask> verifyJar = project.getTasks().register(
+                "verifyKlibJar", VerifyKlibJarTask.class, task -> {
+                    task.setGroup(LifecycleBasePlugin.VERIFICATION_GROUP);
+                    task.dependsOn(candidateJar);
+                    task.getArchiveFile().set(candidateJar.flatMap(KlibShadeJarTask::getArchiveFile));
+                    task.getPaper().set(extension.getPackaging().getPaper());
+                    task.getGuardProduct().set(extension.getGuardProductConfigured());
+                    task.getHostPackages().set(extension.getPackaging().getHostPackages());
+                    task.getBuildVersion().set(project.provider(() -> String.valueOf(project.getVersion())));
+                });
+        TaskProvider<VerifyKlibApiJarTask> verifyApi = project.getTasks().register(
+                "verifyKlibApiJar", VerifyKlibApiJarTask.class, task -> {
+                    task.setGroup(LifecycleBasePlugin.VERIFICATION_GROUP);
+                    task.dependsOn(prepareArchive);
+                    task.getArchives().from(extension.getApi().getArchives());
+                    task.getPackages().set(extension.getApi().getPackages());
+                    task.getHostPackages().set(extension.getApi().getHostPackages());
+                });
+        project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME)
+                .configure(task -> task.dependsOn(verifyJar, verifyApi, verifyGuardProduct));
+        // 无论 publication 选用成品还是自有 API artifact，都必须先验证。
+        project.getPlugins().withId("maven-publish", ignored -> {
+            project.getTasks().withType(org.gradle.api.publish.maven.tasks.AbstractPublishToMaven.class)
+                    .configureEach(task -> task.dependsOn(verifyJar, verifyApi, verifyGuardProduct));
+            project.getTasks().withType(org.gradle.api.publish.tasks.GenerateModuleMetadata.class)
+                    .configureEach(task -> task.dependsOn(verifyJar, verifyApi, verifyGuardProduct));
+        });
+
         TaskProvider<PromoteKlibJarTask> publishJar = project.getTasks().register(
                 "publishKlibJar",
                 PromoteKlibJarTask.class,
                 task -> {
                     task.setGroup("build");
                     task.setDescription("Publishes a validated Klib JAR to build/libs.");
-                    task.dependsOn(verifyGuardProduct);
+                    task.dependsOn(verifyGuardProduct, verifyJar, verifyApi);
                     task.getCandidateFile().set(
                             candidateJar.flatMap(KlibShadeJarTask::getArchiveFile));
                     task.getArchiveFile().set(finalArchive);
                 });
+
+        project.getPlugins().withId("maven-publish", ignored -> project.getTasks()
+                .withType(org.gradle.api.publish.maven.tasks.AbstractPublishToMaven.class)
+                .configureEach(task -> task.dependsOn(publishJar)));
+
+        for (String configuration : java.util.Arrays.asList("apiElements", "runtimeElements")) {
+            project.getConfigurations().named(configuration, outgoing -> {
+                outgoing.getOutgoing().getArtifacts().clear();
+                outgoing.getOutgoing().artifact(finalArchive, artifact -> artifact.builtBy(publishJar));
+            });
+        }
 
         project.getTasks().register("shadowJar", task -> {
             task.setGroup("build");
@@ -322,6 +364,42 @@ public final class KlibPlugin implements Plugin<Project> {
                 .configure(task -> task.dependsOn(publishJar));
 
         project.afterEvaluate(ignored -> {
+            if (!extension.getApi().getArchives().isEmpty()) {
+                if (extension.getApi().getArchives().getFiles().size() != 1)
+                    throw new org.gradle.api.GradleException("klib.api.archive requires one API candidate JAR");
+                // 声明的 Jar producer 统一移到候选目录，不能在验证前写入 build/libs。
+                for (org.gradle.api.Task producer : extension.getApi().getArchives().getBuildDependencies().getDependencies(null)) {
+                    if (producer instanceof Jar) ((Jar) producer).getDestinationDirectory().set(
+                            project.getLayout().getBuildDirectory().dir("intermediates/klib/api/" + producer.getName()));
+                }
+                Provider<org.gradle.api.file.RegularFile> apiArchive = project.getLayout().getBuildDirectory().file(
+                        project.provider(() -> "libs/" + project.getName() + "-" + project.getVersion() + "-api.jar"));
+                if (extension.getApi().getArchives().getSingleFile().toPath().startsWith(
+                        project.getLayout().getBuildDirectory().dir("libs").get().getAsFile().toPath()))
+                    throw new org.gradle.api.GradleException("API candidate must be outside build/libs; supply a Jar archiveFile provider");
+                prepareArchive.configure(task -> task.delete(apiArchive));
+                verifyApi.configure(task -> task.dependsOn(prepareArchive));
+                TaskProvider<PromoteKlibJarTask> promoteApi = project.getTasks().register(
+                        "publishKlibApiJar", PromoteKlibJarTask.class, task -> {
+                            task.setGroup("build");
+                            task.dependsOn(verifyApi, verifyJar, verifyGuardProduct);
+                            task.getCandidateFile().set(project.getLayout().file(project.provider(
+                                    () -> extension.getApi().getArchives().getSingleFile())));
+                            task.getArchiveFile().set(apiArchive);
+                        });
+                publishJar.configure(task -> task.dependsOn(promoteApi));
+                project.getPlugins().withId("maven-publish", plugin -> {
+                    org.gradle.api.publish.PublishingExtension publishing = project.getExtensions()
+                            .getByType(org.gradle.api.publish.PublishingExtension.class);
+                    publishing.getPublications().withType(org.gradle.api.publish.maven.MavenPublication.class)
+                            .configureEach(publication -> {
+                                publication.getArtifacts().removeIf(artifact -> extension.getApi().getArchives().contains(artifact.getFile()));
+                                publication.artifact(apiArchive, artifact -> {
+                                    artifact.setClassifier("api"); artifact.builtBy(promoteApi);
+                                });
+                            });
+                });
+            }
             includeScriptForKetherInterop(extension);
             configureSelection(project, extension, embedded, embeddedClasspath, candidateJar);
             if (extension.getGuardProductConfigured().get()) {
@@ -427,6 +505,15 @@ public final class KlibPlugin implements Plugin<Project> {
                     "org.jetbrains.kotlin:kotlin-stdlib:" + KOTLIN_VERSION);
         }
         Map<String, String> relocations = new LinkedHashMap<String, String>(plan.relocations());
+        if (extension.getPackaging().getPaper().get()) {
+            if (guardProduct) throw new org.gradle.api.GradleException("packaging.paper() cannot be combined with guardProduct");
+            java.util.List<String> hosts = extension.getPackaging().getHostPackages().get();
+            JarBoundary.packages(hosts);
+            // 只移除默认宿主映射；用户规则留给 shade 的门禁拒绝，确保先清掉旧正式包。
+            relocations.entrySet().removeIf(rule -> !extension.getRelocations().get().containsKey(rule.getKey())
+                    && hosts.stream().anyMatch(host -> JarBoundary.within(rule.getKey().replace('.', '/'), host.replace('.', '/'))));
+        }
+
         java.util.List<String> protectedPrefixes = new java.util.ArrayList<String>(plan.protectedPrefixes());
         for (Map.Entry<String, String> library : extension.getExternalLibraries().get().entrySet()) {
             String[] coordinate = library.getValue().split(":");

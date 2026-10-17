@@ -71,6 +71,7 @@ import java.util.Set;
 @SuppressWarnings({"deprecation", "classfile"}) // 旧 metadata 的 context receivers 仍须完整遍历。
 final class KotlinMetadataRelocator {
     private static final String METADATA_DESCRIPTOR = "Lkotlin/Metadata;";
+    private java.util.function.Consumer<String> referenceCheck;
     private final Map<String, String> relocations;
     private final List<String> protectedPrefixes;
     private final Set<KmType> visitedTypes = Collections.newSetFromMap(new IdentityHashMap<KmType, Boolean>());
@@ -123,6 +124,24 @@ final class KotlinMetadataRelocator {
             throw new GradleException("Cannot safely relocate Kotlin metadata in " + reader.getClassName()
                     + ": " + failure.getMessage(), failure);
         }
+    }
+
+    /** API 检查复用同一结构化遍历；不重写、不信任 d1/d2 普通字符串搜索。 */
+    static void verifyApi(byte[] source, java.util.function.Consumer<String> referenceCheck) {
+        final MetadataFields[] fields = new MetadataFields[1];
+        new ClassReader(source).accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+                if (!METADATA_DESCRIPTOR.equals(descriptor)) return null;
+                if (fields[0] != null) throw unsafe("Duplicate kotlin.Metadata annotation");
+                fields[0] = new MetadataFields(); return fields[0];
+            }
+        }, 0);
+        if (fields[0] == null) return;
+        Metadata metadata = fields[0].metadata();
+        validateVersion(metadata.mv()); validateClassPayload(metadata);
+        KotlinMetadataRelocator visitor = new KotlinMetadataRelocator(Collections.emptyMap(), Collections.emptyList());
+        visitor.referenceCheck = referenceCheck;
+        visitor.rewrite(KotlinClassMetadata.readStrict(metadata));
     }
 
     static final class PreparedClass {
@@ -200,6 +219,22 @@ final class KotlinMetadataRelocator {
         } catch (IOException | RuntimeException failure) {
             throw new GradleException("Cannot safely relocate .kotlin_module: " + failure.getMessage(), failure);
         }
+    }
+
+    static void verifyApiModule(byte[] source, java.util.function.Consumer<String> referenceCheck) {
+        try {
+            BinaryMetadata binary = BinaryMetadata.read(source);
+            validateVersion(binary.version); validateModuleFields(binary);
+            KotlinModuleMetadata module = KotlinModuleMetadata.read(source);
+            for (KmPackageParts parts : module.getKmModule().getPackageParts().values()) {
+                for (String facade : parts.getFileFacades()) referenceCheck.accept(facade);
+                for (Map.Entry<String, String> part : parts.getMultiFileClassParts().entrySet()) {
+                    referenceCheck.accept(part.getKey()); referenceCheck.accept(part.getValue());
+                }
+            }
+            if (!module.getKmModule().getOptionalAnnotationClasses().isEmpty())
+                throw unsafe("API module-level annotation metadata is not supported");
+        } catch (IOException failure) { throw new GradleException("Cannot verify API .kotlin_module", failure); }
     }
 
     private void rewrite(KotlinClassMetadata metadata) {
@@ -423,6 +458,7 @@ final class KotlinMetadataRelocator {
     }
 
     private String internalName(String name) {
+        if (referenceCheck != null && name != null && !name.isEmpty()) referenceCheck.accept(name);
         return relocateName(name, '/');
     }
 

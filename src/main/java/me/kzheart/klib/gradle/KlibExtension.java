@@ -11,6 +11,9 @@ import java.util.Arrays;
 
 /** 用于生成 Bukkit 元数据并组装内嵌依赖插件 JAR 的 DSL 配置值。 */
 public class KlibExtension {
+    private final Property<Integer> jvmTarget;
+    private final KlibPackagingSpec packaging;
+    private final KlibApiSpec api;
     private final Property<String> name;
     private final Property<String> main;
     private final Property<String> version;
@@ -30,6 +33,9 @@ public class KlibExtension {
 
     @Inject
     public KlibExtension(ObjectFactory objects) {
+        jvmTarget = objects.property(Integer.class).convention(8);
+        packaging = objects.newInstance(KlibPackagingSpec.class);
+        api = objects.newInstance(KlibApiSpec.class);
         remote = objects.newInstance(KlibRemoteSpec.class);
         remoteConfigured = objects.property(Boolean.class);
         remoteConfigured.convention(Boolean.FALSE);
@@ -49,6 +55,15 @@ public class KlibExtension {
         externalLibraries = objects.mapProperty(String.class, String.class);
         ketherInterop = objects.property(Boolean.class);
     }
+
+    /** 用户项目目标独立于 Klib 库的 Java 8 制品。 */
+    public Property<Integer> getJvmTarget() { return jvmTarget; }
+    public void jvmTarget(int value) { jvmTarget.set(value); }
+
+    public KlibPackagingSpec getPackaging() { return packaging; }
+    public void packaging(Action<? super KlibPackagingSpec> action) { action.execute(packaging); }
+    public KlibApiSpec getApi() { return api; }
+    public void api(Action<? super KlibApiSpec> action) { action.execute(api); }
 
     public Property<String> getName() {
         return name;

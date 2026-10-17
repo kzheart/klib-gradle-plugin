@@ -1,7 +1,7 @@
 # Gradle plugin
 
 The plugin applies Kotlin/JVM 2.4.21 automatically. Put Kotlin in `src/main/kotlin` and Java in
-`src/main/java`; mixed-source projects compile with Java 8 bytecode and the Java 8 API baseline.
+`src/main/java`; mixed-source projects default to Java 8 bytecode and the Java 8 API baseline.
 Do not apply a second, differently versioned Kotlin compiler plugin. Add `mavenCentral()` to your
 project repositories (or an equivalent approved mirror).
 
@@ -58,10 +58,10 @@ silently relax the host's security boundary. Coroutine debug-agent instrumentati
 compiler-plugin binary payloads are outside the verified runtime surface.
 
 Multi-release entries are retained and relocated, and the final manifest carries
-`Multi-Release: true`. Only base classes must target Java 8; version-specific classes may target
+`Multi-Release: true`. The default Java 8 target applies to base classes; version-specific classes may target
 their declared newer JVM. Inputs containing versioned entries without an enabling manifest are
-rejected. Dependency manifests, signature files, indexes, module descriptors, and dependency
-`plugin.yml` files are intentionally excluded from the aggregate JAR. Ordinary binary resources
+rejected. Dependency manifests, signature files, indexes, and module descriptors are excluded.
+Generic mode ignores library `plugin.yml` files; Paper mode rejects them. Ordinary binary resources
 are preserved; service files are merged and matching Kotlin module indexes are merged.
 
 ## External runtime libraries
@@ -84,3 +84,56 @@ reject this Bukkit-only mode. No separate Kotlin sidecar artifact is produced.
 
 See the [English guide](README.md) for the complete module DSL. PostgreSQL is selected with
 `data { postgresql() }`; its driver and JDBC service descriptor relocate together.
+
+## Paper host and shared API gates
+
+Opt into the Paper host policy explicitly; omitting it preserves generic packaging:
+
+```kotlin
+val apiJar = tasks.register<Jar>("apiJar") {
+    from(sourceSets.main.get().output)
+    include("com/example/api/**", "META-INF/*.kotlin_module")
+    archiveClassifier.set("api")
+}
+klib {
+    packaging { paper() }
+    api {
+        archive(apiJar.flatMap { it.archiveFile })
+        packages("com.example.api")
+    }
+    modules { data { pool(); postgresql() } }
+}
+```
+
+Default host packages are `net.kyori`, `org.bukkit`, `io.papermc`, `com.google.gson`, and `org.yaml.snakeyaml`.
+Append with `hostPackages("org.example.host")`, or replace the complete list using `hostPackages.set(listOf(...))`.
+Raw inputs and the final archive must not embed host packages or their children. Relocation sources and targets cannot overlap a host package, including its parents.
+The mode removes matching default relocation rules; it rejects incorrectly embedded host classes rather than dropping them. Every multi-release layer is checked. Nested JAR/ZIP archives are rejected.
+All Bukkit/Paper outputs require exactly one root `plugin.yml`, strict UTF-8, no `${...}` / `@name@` placeholders, and a version equal to `project.version`.
+Paper also rejects library `plugin.yml` entries; generic mode keeps ignoring library descriptors. Paper and Guard modes cannot be combined.
+
+`api.archive(Object provider)` accepts one raw API JAR file provider, with explicit `api.packages(String...)`.
+Jar producers move into `build/intermediates/klib/api/<task>/`; successful validation promotes the candidate to `build/libs/<name>-<version>-api.jar`.
+Direct input files must live outside `build/libs`. Maven publications automatically attach the verified `api` classifier; do not attach the raw API archive again.
+Failed validation removes previous local final outputs and never promotes candidates. It does not remove versions already published remotely.
+
+`verifyKlibJar`, `verifyKlibApiJar`, and existing Guard verification gate `check`, final archives, and Maven publication.
+The Java component exposes the verified main artifact. Source/Javadoc archives are not API binary inputs.
+API archives are not relocated. References may only target declared API packages, JDK, and agreed host types (Bukkit/Paper/Adventure by default); Kotlin runtimes, coroutines, KLib, and other implementation types are rejected.
+The API host allowlist is independent of packaging exclusions. Append with `api { hostPackages("org.example.host") }`; Paper-provided Gson/SnakeYAML are not automatically allowed API types.
+ASM inspects inheritance, descriptors, generic signatures, throws, annotation values, records, and full code including handles, invokedynamic, recursive constant-dynamic, frames, and locals.
+Only `kotlin.Metadata` and necessary nullability annotations are exceptions. Structured metadata permits JVM-mapped Kotlin builtins; it does not permit function types, `Intrinsics`, or `DefaultConstructorMarker`.
+Pure Kotlin interfaces can pass. Classes with default arguments or executable Kotlin code may generate runtime references and should remain implementation details.
+
+API `.kotlin_module` files must reference API types only; use a separate API source set when a shared module index also lists implementations.
+Resources are limited to manifests, license/NOTICE files, and module indexes. Unknown metadata versions, opaque compiler extensions, and optional module annotation declarations fail.
+Reflection strings, generated classes, actual values erased to Object, and external configuration remain outside static guarantees. This is neither a sandbox nor proof of server compatibility.
+
+## Optional pool and project JVM
+
+`modules { data { pool() } }` selects `klib-data-pool → klib-data-jdbc → klib-data → klib-core`, without selecting a database driver.
+Its actual DBCP2 runtime closure is resolved from the artifact POM; `org.apache.commons.dbcp2`, `org.apache.commons.pool2`, and `org.apache.commons.logging` are isolated together.
+Without `pool()`, JDBC and database backends do not acquire pool dependencies. Existing explicit `klibEmbedded` rules still apply.
+
+KLib and the Gradle plugin remain Java 8. A consumer may independently set `klib { jvmTarget(25) }` and `java { toolchain { languageVersion.set(JavaLanguageVersion.of(25)) } }`.
+This controls Java release, Kotlin JVM target, and Kotlin `-Xjdk-release`; the default remains 8 and embedded library bytecode is unchanged.

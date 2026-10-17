@@ -110,6 +110,7 @@ public abstract class PrepareKetherInteropJarTask extends DefaultTask {
             throw new GradleException("plugin.yml is missing from the plugin jar");
         }
 
+        JarBoundary.strictUtf8(pluginYaml);
         entries.put(originalPath, makeExtendable(originalClass, originalMain));
         entries.put(generatedPath, generateSubclass(generatedMain, originalMain));
         entries.put("plugin.yml", rewriteMain(pluginYaml, generatedMain));
@@ -126,6 +127,7 @@ public abstract class PrepareKetherInteropJarTask extends DefaultTask {
                     continue;
                 }
                 try (InputStream input = zip.getInputStream(entry)) {
+                    if (entries.containsKey(entry.getName())) throw new GradleException("Duplicate JAR entry: " + entry.getName());
                     entries.put(entry.getName(), readAll(input));
                 }
             }

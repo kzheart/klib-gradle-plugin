@@ -44,3 +44,11 @@ Select PostgreSQL with `modules { data { postgresql() } }`, or MySQL with `data 
 ## 外部运行时依赖
 
 `klib { externalLibrary("org.postgresql:postgresql:<pgjdbc-version>", "org.postgresql") }` 声明固定 Maven 坐标到 Bukkit/Paper `plugin.yml` 的 `libraries`，从内嵌依赖中排除该制品，并停止该包的重定位。要求宿主支持库加载器，部署前准备缓存；Klib 模块仍分别内嵌和隔离。Velocity 和 Guard 商品通过各自宿主提供依赖。
+
+Paper projects can opt into `klib { packaging { paper() } }` to reject embedded or relocated host packages.
+Declare a shared API using `api { archive(apiJar.flatMap { it.archiveFile }); packages("com.example.api") }`;
+`check`, final archives, and Maven publication verify its full bytecode and Kotlin metadata boundary.
+Candidates only become final JARs after validation. See [Paper and API rules](docs/gradle-plugin.en.md#paper-host-and-shared-api-gates).
+
+`modules { data { pool() } }` adds the optional DBCP2 pool with isolated transitive dependencies; JDBC and drivers remain pool-free unless selected.
+Consumer JVM targets are independent: `jvmTarget(25)` plus a Java 25 toolchain leaves KLib and this plugin on Java 8.

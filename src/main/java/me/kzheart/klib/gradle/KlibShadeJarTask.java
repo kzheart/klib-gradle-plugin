@@ -68,11 +68,17 @@ public abstract class KlibShadeJarTask extends DefaultTask {
     @Input
     public abstract Property<Boolean> getGuardProduct();
 
+    @Input public abstract Property<Boolean> getPaper();
+    @Input public abstract ListProperty<String> getHostPackages();
+
     @OutputFile
     public abstract RegularFileProperty getArchiveFile();
 
     @TaskAction
     public void shade() {
+        JarBoundary.packages(getHostPackages().getOrElse(Collections.emptyList()));
+        if (getPaper().getOrElse(false)) for (Map.Entry<String, String> rule : getRelocations().get().entrySet())
+            JarBoundary.relocation(rule.getKey(), rule.getValue(), getHostPackages().get());
         Map<String, Resource> entries = new LinkedHashMap<String, Resource>();
         ReadBudget budget = new ReadBudget();
         File base = getBaseJar().get().getAsFile();
@@ -143,6 +149,8 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             List<? extends ZipEntry> archiveEntries = Collections.list(zip.entries());
             Collections.sort(archiveEntries, Comparator.comparing(ZipEntry::getName));
             for (ZipEntry entry : archiveEntries) {
+                if (!entry.isDirectory() && getPaper().getOrElse(false) && relocatePath && "plugin.yml".equalsIgnoreCase(JarBoundary.logicalPath(entry.getName())))
+                    throw new GradleException("Embedded library must not contain plugin.yml: " + archive);
                 if (entry.isDirectory() || excluded(entry.getName(), relocatePath)) {
                     continue;
                 }
@@ -184,6 +192,8 @@ public abstract class KlibShadeJarTask extends DefaultTask {
                     .sorted()
                     .forEach(path -> {
                         String name = root.relativize(path).toString().replace(File.separatorChar, '/');
+                        if (getPaper().getOrElse(false) && "plugin.yml".equalsIgnoreCase(JarBoundary.logicalPath(name)))
+                            throw new GradleException("Embedded directory must not contain plugin.yml: " + path);
                         if (!excluded(name, true)) {
                             if (name.startsWith("META-INF/versions/") && !multiRelease) {
                                 throw new GradleException("Versioned shade entry without Multi-Release: true: " + path);
@@ -215,6 +225,8 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             boolean relocateContent,
             Map<String, Resource> entries
     ) {
+        JarBoundary.entry(originalName, originalContent, getHostPackages().getOrElse(Collections.emptyList()), getPaper().getOrElse(false));
+        if ("plugin.yml".equalsIgnoreCase(JarBoundary.logicalPath(originalName))) JarBoundary.strictUtf8(originalContent);
         Map<String, String> relocations = getRelocations().get();
         List<String> protectedPrefixes = getProtectedRelocationPrefixes().get();
         String name = relocatePath
@@ -249,6 +261,8 @@ public abstract class KlibShadeJarTask extends DefaultTask {
             throw new GradleException("Cannot relocate shade entry " + originalName + ": " + failure.getMessage(), failure);
         }
 
+        if ("plugin.yml".equalsIgnoreCase(name) && entries.containsKey(name))
+            throw new GradleException("Duplicate plugin.yml in shade inputs");
         Resource previous = entries.get(name);
         if (previous == null) {
             entries.put(name, new Resource(content));
