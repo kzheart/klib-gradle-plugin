@@ -92,7 +92,9 @@ klib {
 
 默认宿主包为 `net.kyori`、`org.bukkit`、`io.papermc`、`com.google.gson`、`org.yaml.snakeyaml`。
 宿主包及子包不能内嵌，覆盖宿主的父包也不能重定位；同时检查原始输入与最终包，不能先重定位绕过。
-这项模式移除对应默认重定位，不会悄悄丢弃错误内嵌的宿主类。multi-release 各层均检查；嵌套 JAR/ZIP 明确拒绝。
+这项模式移除对应默认重定位，并在所选 KLib 模块的依赖边排除已知宿主制品（Bukkit/Paper API、Gson、SnakeYAML 与 Adventure/Examination 闭包）。
+完整模块 runtime 闭包通过 `klibPaperModuleClasspath` 保留编译可见性，不作为额外内嵌根；不要求消费者逐项 `externalLibrary`。
+用户显式 `klibEmbedded` 根及其依赖不会因此被排除，错误宿主输入仍失败；不会按包静默丢弃输入类。multi-release 各层均检查；嵌套 JAR/ZIP 明确拒绝。
 所有 Bukkit/Paper 成品要求根 `plugin.yml` 唯一、严格 UTF-8、无 `${...}` / `@name@` 占位符，版本必须等于 `project.version`。
 Paper 模式还拒绝依赖携带的 `plugin.yml`；通用模式继续忽略依赖描述文件。Guard 不能与 `paper()` 同时使用。
 

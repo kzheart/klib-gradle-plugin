@@ -80,18 +80,8 @@ public final class KlibPlugin implements Plugin<Project> {
                     configuration.setDescription(
                             "Resolved dependencies embedded in the final Klib JAR.");
                     configuration.extendsFrom(embedded);
-                    excludeHostProvided(configuration);
-                    configuration.getAttributes()
-                            .attribute(Usage.USAGE_ATTRIBUTE,
-                                    project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME))
-                            .attribute(Category.CATEGORY_ATTRIBUTE,
-                                    project.getObjects().named(Category.class, Category.LIBRARY))
-                            .attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
-                                    project.getObjects().named(LibraryElements.class, LibraryElements.JAR))
-                            .attribute(Bundling.BUNDLING_ATTRIBUTE,
-                                    project.getObjects().named(Bundling.class, Bundling.EXTERNAL))
-                            .attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 8)
-                            .attribute(KotlinPlatformType.Companion.getAttribute(), KotlinPlatformType.jvm);
+                    exclude(configuration, "org.xerial", "sqlite-jdbc");
+                    runtimeAttributes(project, configuration);
                 });
         project.getConfigurations().getByName(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME)
                 .extendsFrom(embedded);
@@ -426,6 +416,16 @@ public final class KlibPlugin implements Plugin<Project> {
         extension.getGuardProduct().getGuardApiVersion().convention(bundledGuardApiVersion());
     }
 
+    private static void runtimeAttributes(Project project, Configuration configuration) {
+        configuration.getAttributes()
+                .attribute(Usage.USAGE_ATTRIBUTE, project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME))
+                .attribute(Category.CATEGORY_ATTRIBUTE, project.getObjects().named(Category.class, Category.LIBRARY))
+                .attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, project.getObjects().named(LibraryElements.class, LibraryElements.JAR))
+                .attribute(Bundling.BUNDLING_ATTRIBUTE, project.getObjects().named(Bundling.class, Bundling.EXTERNAL))
+                .attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 8)
+                .attribute(KotlinPlatformType.Companion.getAttribute(), KotlinPlatformType.jvm);
+    }
+
     private static void excludeHostProvided(Configuration configuration) {
         exclude(configuration, "org.spigotmc", "spigot-api");
         exclude(configuration, "com.google.code.gson", "gson");
@@ -458,6 +458,7 @@ public final class KlibPlugin implements Plugin<Project> {
             Configuration embeddedClasspath,
             TaskProvider<KlibShadeJarTask> candidateJar
     ) {
+        if (!extension.getPackaging().getPaper().get()) excludeHostProvided(embeddedClasspath);
         ModuleSelection modules = ModuleSelection.resolve(extension.getModules().get());
         String klibVersion = extension.getLibraryVersion().get().trim();
         requireSemanticVersion("klib.libraryVersion", klibVersion);
@@ -489,6 +490,16 @@ public final class KlibPlugin implements Plugin<Project> {
             core.put("module", "klib-core");
             embeddedClasspath.exclude(core);
         }
+        Configuration paperCompile = null;
+        if (!guardProduct && extension.getPackaging().getPaper().get()) {
+            paperCompile = project.getConfigurations().create("klibPaperModuleClasspath", configuration -> {
+                configuration.setCanBeConsumed(false); configuration.setCanBeResolved(true);
+                configuration.setDescription("Unfiltered Klib module runtime closure used only for Paper compilation.");
+                runtimeAttributes(project, configuration);
+            });
+            paperCompile.shouldResolveConsistentlyWith(project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME));
+            project.getDependencies().add(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME, project.files(paperCompile));
+        }
         for (KlibModule module : modules.resolved()) {
             if (guardProduct && module == KlibModule.CORE) {
                 continue;
@@ -496,6 +507,13 @@ public final class KlibPlugin implements Plugin<Project> {
             Object dependency = guardProduct
                     ? guardModuleDependency(project, module.artifactSuffix(), klibVersion)
                     : moduleDependency(module.artifactSuffix(), klibVersion);
+            if (!guardProduct && extension.getPackaging().getPaper().get()) {
+                // 编译仍按完整模块 POM 解析；仅内嵌模块根排除宿主依赖。
+                project.getDependencies().add(paperCompile.getName(), dependency);
+                ExternalModuleDependency bundled = (ExternalModuleDependency) project.getDependencies().create(dependency);
+                PaperHostDependencies.excludeFrom(bundled, extension.getPackaging().getHostPackages().get());
+                dependency = bundled;
+            }
             project.getDependencies().add(
                     embedded.getName(),
                     dependency);

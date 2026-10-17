@@ -108,7 +108,9 @@ klib {
 Default host packages are `net.kyori`, `org.bukkit`, `io.papermc`, `com.google.gson`, and `org.yaml.snakeyaml`.
 Append with `hostPackages("org.example.host")`, or replace the complete list using `hostPackages.set(listOf(...))`.
 Raw inputs and the final archive must not embed host packages or their children. Relocation sources and targets cannot overlap a host package, including its parents.
-The mode removes matching default relocation rules; it rejects incorrectly embedded host classes rather than dropping them. Every multi-release layer is checked. Nested JAR/ZIP archives are rejected.
+The mode removes matching default relocation rules and excludes known host artifacts only on selected KLib module dependency edges (Bukkit/Paper APIs, Gson, SnakeYAML, and the Adventure/Examination closure).
+The complete module runtime closure remains compile-visible through `klibPaperModuleClasspath` without becoming an extra embedded root or requiring per-consumer `externalLibrary` declarations.
+Explicit user `klibEmbedded` roots and their dependencies are still checked and rejected when they embed hosts. No input classes are silently stripped by package. Every multi-release layer is checked. Nested JAR/ZIP archives are rejected.
 All Bukkit/Paper outputs require exactly one root `plugin.yml`, strict UTF-8, no `${...}` / `@name@` placeholders, and a version equal to `project.version`.
 Paper also rejects library `plugin.yml` entries; generic mode keeps ignoring library descriptors. Paper and Guard modes cannot be combined.
 
