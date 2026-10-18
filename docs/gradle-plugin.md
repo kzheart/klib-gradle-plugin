@@ -5,7 +5,7 @@
 版本的 Kotlin 编译插件；项目仓库需声明 `mavenCentral()` 或对应可信镜像。
 
 ```kotlin
-plugins { id("me.kzheart.klib") version "0.8.0" }
+plugins { id("me.kzheart.klib") version "0.8.1" }
 repositories { mavenCentral() }
 klib {
     main("com.example.MyPlugin")
@@ -116,6 +116,30 @@ Kotlin 纯接口可以通过；含默认参数或运行时代码的类可能生�
 API 的 `.kotlin_module` 也要只引用本 API；混合实现的 module 索引会失败，宜使用独立 API source set。
 API 资源限 manifest、许可证/NOTICE 和 module 索引；未知 Metadata 版本、不可检查的编译器扩展和可选模块注解声明会失败。
 反射字符串、运行时生成类、擦除为 Object 的实际对象类型和外部配置不在静态保证内；验证不是沙箱，也不证明服务端兼容。
+
+## Velocity 原生任务
+
+原生多平台工程可只加载插件任务类型（`apply false`），让现有任务生成 Velocity 描述文件和候选包：
+
+```kotlin
+plugins { id("me.kzheart.klib") version "0.8.1" apply false }
+
+val verifyVelocity = tasks.register<me.kzheart.klib.gradle.VerifyKlibJarTask>("verifyVelocity") {
+    archiveFile.set(candidateJar.flatMap { it.archiveFile })
+    velocity.set(true)
+    paper.set(false)
+    guardProduct.set(false)
+    hostPackages.set(emptyList())
+    buildVersion.set(project.version.toString())
+}
+```
+
+`candidateJar` 为项目已有的候选 JAR 任务；也可接显式配置的 `KlibShadeJarTask.archiveFile` provider。
+使用 `KlibShadeJarTask` 时，其 `guardProduct`、`paper` 均设 `false`，依赖与重定位沿用项目明确声明的输入；不要用 Guard 模式绕过 Bukkit 描述文件检查。
+打包前检查原始描述文件 UTF-8，不接受依赖 JAR/目录携带 `velocity-plugin.json`，也不合并重复描述文件。
+`velocity` 默认 `false`，只在这个验证任务上开启；不能与 Paper 或 Guard 模式混用，不生成描述文件，也不自动改变普通 `klib {}` 打包流水线。
+Velocity 包必须恰有一个根 `velocity-plugin.json`，严格 UTF-8 和 JSON，`id/main/version` 是非空字符串，版本等于构建版本；重复键、未展开占位符、NUL、嵌套路径、multi-release 或大小写描述文件别名及任意 `plugin.yml` 均拒绝。
+既有嵌套归档与条目边界继续生效；验证成功后再连接项目的正式包晋升与发布任务。本模式只验证制品边界，不证明 Velocity 运行兼容。
 
 ## 可选连接池与项目 JVM
 

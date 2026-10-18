@@ -6,7 +6,7 @@ Gradle build integration with default Kotlin/JVM 2.4.21 and Java 8 output for Bu
 
 ```kotlin
 plugins {
-    id("me.kzheart.klib") version "0.8.0"
+    id("me.kzheart.klib") version "0.8.1"
 }
 repositories { mavenCentral() }
 
@@ -52,3 +52,5 @@ Candidates only become final JARs after validation. Previous owned final JARs ar
 
 `modules { data { pool() } }` adds the optional DBCP2 pool with isolated transitive dependencies; JDBC and drivers remain pool-free unless selected.
 Consumer JVM targets are independent: `jvmTarget(25)` plus a Java 25 toolchain leaves KLib and this plugin on Java 8.
+
+Native Velocity builds can register `VerifyKlibJarTask` directly with `velocity.set(true)`; this verifies a unique root `velocity-plugin.json` without introducing Bukkit or Guard entrypoints. See the [native task example](docs/gradle-plugin.en.md#native-velocity-tasks).

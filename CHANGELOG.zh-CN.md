@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.8.1 (2026-10-18)
+
+- 为 `VerifyKlibJarTask` 增加显式 Velocity 原生描述文件验证，检查严格 JSON/UTF-8、版本和描述文件隔离，保留 Bukkit/Guard 默认边界。
+
 ## 未发布
 
 - 默认应用 Kotlin/JVM 2.4.21，混合编译 Kotlin/Java 到 Java 8，并将 stdlib 作为显式内嵌根

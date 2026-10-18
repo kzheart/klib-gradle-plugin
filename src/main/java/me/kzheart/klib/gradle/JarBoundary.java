@@ -1,6 +1,13 @@
 package me.kzheart.klib.gradle;
 
 import org.gradle.api.GradleException;
+import com.google.gson.Strictness;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.objectweb.asm.ClassReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -53,10 +60,69 @@ final class JarBoundary {
                 || overlaps(target.replace('.', '/'), host.replace('.', '/')))
             throw new GradleException("Paper host package must not be relocated or covered by a parent: " + source + " -> " + target);
     }
-    static String strictUtf8(byte[] bytes) {
+    static String strictUtf8(byte[] bytes) { return strictUtf8(bytes, "plugin.yml"); }
+    static String strictUtf8(byte[] bytes, String descriptor) {
         try { return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString(); }
-        catch (CharacterCodingException failure) { throw new GradleException("plugin.yml must be strict UTF-8", failure); }
+        catch (CharacterCodingException failure) { throw new GradleException(descriptor + " must be strict UTF-8", failure); }
+    }
+    static boolean velocityDescriptor(String path) {
+        String logical = logicalPath(path);
+        return "velocity-plugin.json".equalsIgnoreCase(logical.substring(logical.lastIndexOf('/') + 1));
+    }
+    static void velocityJson(byte[] bytes, String version) {
+        String json = strictUtf8(bytes, "velocity-plugin.json");
+        try (JsonReader reader = new JsonReader(new StringReader(json))) {
+            reader.setStrictness(Strictness.STRICT);
+            if (reader.peek() != JsonToken.BEGIN_OBJECT)
+                throw new GradleException("velocity-plugin.json must be a JSON object");
+            Map<String, String> fields = jsonObject(reader, true);
+            if (reader.peek() != JsonToken.END_DOCUMENT)
+                throw new GradleException("velocity-plugin.json must contain one JSON object");
+            for (String field : new String[] {"id", "main", "version"})
+                if (!fields.containsKey(field) || fields.get(field).trim().isEmpty())
+                    throw new GradleException("velocity-plugin.json requires a nonempty string " + field);
+            if (!version.equals(fields.get("version")))
+                throw new GradleException("velocity-plugin.json version must equal project.version: expected "
+                        + version + ", got " + fields.get("version"));
+        } catch (IOException | IllegalStateException failure) {
+            throw new GradleException("velocity-plugin.json must be strict JSON", failure);
+        }
+    }
+    private static Map<String, String> jsonObject(JsonReader reader, boolean root) throws IOException {
+        Map<String, String> strings = new LinkedHashMap<String, String>();
+        Set<String> keys = new HashSet<String>();
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String key = reader.nextName();
+            jsonString(key);
+            if (!keys.add(key)) throw new GradleException("Duplicate velocity-plugin.json key: " + key);
+            if (reader.peek() == JsonToken.STRING) {
+                String value = reader.nextString(); jsonString(value);
+                if (root) strings.put(key, value);
+            } else jsonValue(reader);
+        }
+        reader.endObject();
+        return strings;
+    }
+    private static void jsonValue(JsonReader reader) throws IOException {
+        switch (reader.peek()) {
+            case BEGIN_OBJECT: jsonObject(reader, false); break;
+            case BEGIN_ARRAY:
+                reader.beginArray();
+                while (reader.hasNext()) jsonValue(reader);
+                reader.endArray(); break;
+            case STRING: jsonString(reader.nextString()); break;
+            case NUMBER: reader.nextString(); break;
+            case BOOLEAN: reader.nextBoolean(); break;
+            case NULL: reader.nextNull(); break;
+            default: throw new GradleException("Invalid velocity-plugin.json value");
+        }
+    }
+    private static void jsonString(String value) {
+        if (value.indexOf('\0') >= 0 || value.contains("${")
+                || Pattern.compile("@[A-Za-z_][A-Za-z0-9_.-]*@").matcher(value).find())
+            throw new GradleException("velocity-plugin.json contains an unexpanded placeholder or NUL");
     }
     static void pluginYaml(byte[] bytes, String version) {
         String yaml = strictUtf8(bytes);

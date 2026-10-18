@@ -227,6 +227,13 @@ public abstract class KlibShadeJarTask extends DefaultTask {
     ) {
         JarBoundary.entry(originalName, originalContent, getHostPackages().getOrElse(Collections.emptyList()), getPaper().getOrElse(false));
         if ("plugin.yml".equalsIgnoreCase(JarBoundary.logicalPath(originalName))) JarBoundary.strictUtf8(originalContent);
+        if (JarBoundary.velocityDescriptor(originalName)) {
+            if (relocatePath) throw new GradleException("Embedded library must not contain velocity-plugin.json: " + originalName);
+            if (!"velocity-plugin.json".equals(originalName))
+                throw new GradleException("velocity-plugin.json must occur once at the JAR root");
+            JarBoundary.strictUtf8(originalContent, "velocity-plugin.json");
+            if (entries.containsKey(originalName)) throw new GradleException("Duplicate velocity-plugin.json in shade inputs");
+        }
         Map<String, String> relocations = getRelocations().get();
         List<String> protectedPrefixes = getProtectedRelocationPrefixes().get();
         String name = relocatePath

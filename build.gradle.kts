@@ -110,6 +110,7 @@ gradlePlugin {
 
 dependencies {
     implementation(gradleApi())
+    implementation("com.google.code.gson:gson:2.13.2")
     implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
     implementation("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.21")
     implementation("org.ow2.asm:asm:9.9.1")

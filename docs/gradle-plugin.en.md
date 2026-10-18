@@ -6,7 +6,7 @@ Do not apply a second, differently versioned Kotlin compiler plugin. Add `mavenC
 project repositories (or an equivalent approved mirror).
 
 ```kotlin
-plugins { id("me.kzheart.klib") version "0.8.0" }
+plugins { id("me.kzheart.klib") version "0.8.1" }
 repositories { mavenCentral() }
 klib {
     main("com.example.MyPlugin")
@@ -132,6 +132,30 @@ Pure Kotlin interfaces can pass. Classes with default arguments or executable Ko
 API `.kotlin_module` files must reference API types only; use a separate API source set when a shared module index also lists implementations.
 Resources are limited to manifests, license/NOTICE files, and module indexes. Unknown metadata versions, opaque compiler extensions, and optional module annotation declarations fail.
 Reflection strings, generated classes, actual values erased to Object, and external configuration remain outside static guarantees. This is neither a sandbox nor proof of server compatibility.
+
+## Native Velocity tasks
+
+Native multi-platform projects can load the task types with `apply false` while generating their own Velocity descriptor and candidate archive:
+
+```kotlin
+plugins { id("me.kzheart.klib") version "0.8.1" apply false }
+
+val verifyVelocity = tasks.register<me.kzheart.klib.gradle.VerifyKlibJarTask>("verifyVelocity") {
+    archiveFile.set(candidateJar.flatMap { it.archiveFile })
+    velocity.set(true)
+    paper.set(false)
+    guardProduct.set(false)
+    hostPackages.set(emptyList())
+    buildVersion.set(project.version.toString())
+}
+```
+
+`candidateJar` is the project's existing candidate JAR task; an explicitly configured `KlibShadeJarTask.archiveFile` provider also works.
+When using `KlibShadeJarTask`, set its `guardProduct` and `paper` to `false`, and retain explicitly declared libraries and relocations. Do not select Guard to bypass Bukkit descriptor validation.
+Shading checks the original descriptor UTF-8 before rewriting, rejects `velocity-plugin.json` in dependency JARs/directories, and never merges duplicate descriptors.
+`velocity` defaults to `false` and is enabled only on this verification task. It cannot be combined with Paper or Guard, does not generate metadata, and does not change the ordinary `klib {}` pipeline.
+A Velocity archive needs exactly one root `velocity-plugin.json`, strict UTF-8 and JSON, nonempty string `id/main/version`, and a version equal to the build version. Duplicate keys, unresolved placeholders, NUL, nested paths, multi-release/case aliases, and any `plugin.yml` are rejected.
+Existing nested-archive and entry boundaries remain active. Connect verification before the project's final archive promotion and publication. This validates artifact boundaries, not Velocity runtime compatibility.
 
 ## Optional pool and project JVM
 

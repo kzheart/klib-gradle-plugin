@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1 (2026-10-18)
+
+- Add explicit native Velocity descriptor validation to `VerifyKlibJarTask`, with strict JSON/UTF-8, version checks, descriptor isolation, and unchanged Bukkit/Guard defaults.
+
 ## Unreleased
 
 - Apply Kotlin/JVM 2.4.21 by default, compile mixed Kotlin/Java sources for Java 8, and embed the stdlib as an explicit runtime root
