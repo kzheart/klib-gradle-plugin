@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 (2026-10-19)
+
+- Relocate JVM type fragments in StringConcatFactory bootstrap recipes, preserving dynamic argument markers and ordinary string literals. Final shaded Nashorn array creation and recompilation are covered by an isolated TestKit consumer.
+
 ## 0.8.1 (2026-10-18)
 
 - Add explicit native Velocity descriptor validation to `VerifyKlibJarTask`, with strict JSON/UTF-8, version checks, descriptor isolation, and unchanged Bukkit/Guard defaults.

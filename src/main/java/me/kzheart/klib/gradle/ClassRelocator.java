@@ -4,13 +4,18 @@ import org.gradle.api.GradleException;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.commons.MethodRemapper;
 import org.objectweb.asm.commons.Remapper;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** 使用 JVM 结构重定位类引用与反射字符串，保留字段和方法标识符。 */
 final class ClassRelocator {
@@ -21,6 +26,8 @@ final class ClassRelocator {
     private static final java.util.regex.Pattern REFLECTION_ARRAY = java.util.regex.Pattern.compile(
             "\\[+L(?:[\\w$]+\\.)+[\\w$]+;");
 
+
+    private static final Pattern OBJECT_DESCRIPTOR_FRAGMENT = Pattern.compile("L((?:[\\w$]+/)+[\\w$]+);");
 
     private ClassRelocator() {
     }
@@ -81,7 +88,32 @@ final class ClassRelocator {
                     }
                     return super.mapValue(value);
                 }
-            }), 0);
+            }) {
+                @Override protected MethodVisitor createMethodRemapper(MethodVisitor visitor) {
+                    return new MethodRemapper(Opcodes.ASM9, visitor, remapper) {
+                        @Override public void visitInvokeDynamicInsn(String name, String descriptor,
+                                Handle bootstrap, Object... arguments) {
+                            // Java 9+ concat recipes are not complete method descriptors: their
+                            // argument slots are represented by U+0001/U+0002 markers. Nashorn uses
+                            // such recipes to assemble descriptors for generated script bytecode.
+                            if (bootstrap.getOwner().equals("java/lang/invoke/StringConcatFactory")
+                                    && bootstrap.getName().equals("makeConcatWithConstants")
+                                    && arguments.length > 0 && arguments[0] instanceof String) {
+                                arguments = arguments.clone();
+                                Matcher fragments = OBJECT_DESCRIPTOR_FRAGMENT.matcher((String) arguments[0]);
+                                StringBuffer relocated = new StringBuffer();
+                                while (fragments.find()) {
+                                    fragments.appendReplacement(relocated, Matcher.quoteReplacement(
+                                            "L" + remapper.map(fragments.group(1)) + ";"));
+                                }
+                                fragments.appendTail(relocated);
+                                arguments[0] = relocated.toString();
+                            }
+                            super.visitInvokeDynamicInsn(name, descriptor, bootstrap, arguments);
+                        }
+                    };
+                }
+            }, 0);
             return metadata.restore(writer.toByteArray());
         } catch (RuntimeException failure) {
             throw new GradleException("Cannot relocate shaded class", failure);

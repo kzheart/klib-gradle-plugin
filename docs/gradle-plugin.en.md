@@ -64,6 +64,8 @@ rejected. Dependency manifests, signature files, indexes, and module descriptors
 Generic mode ignores library `plugin.yml` files; Paper mode rejects them. Ordinary binary resources
 are preserved; service files are merged and matching Kotlin module indexes are merged.
 
+JVM object descriptors embedded in `StringConcatFactory` recipes are relocated while preserving dynamic argument markers. Ordinary text constants do not undergo substring replacement. An isolated final-JAR test verifies Nashorn array creation and dynamic recompilation.
+
 ## External runtime libraries
 
 `externalLibrary` declares a fixed Maven coordinate in Bukkit/Paper `plugin.yml` libraries,

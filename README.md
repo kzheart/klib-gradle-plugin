@@ -35,6 +35,8 @@ preserved. Reflection adapters are verified against official kotlin-reflect 2.4.
 versions/shapes fail. Guard rejects statically visible parent-API calls and overrides with private Kotlin types,
 while Java host signatures and internal stdlib use remain supported. See [runtime packaging and its limits](docs/gradle-plugin.en.md).
 
+StringConcatFactory recipes also relocate embedded JVM object descriptors while retaining argument markers; final shaded Nashorn array execution is verified in an isolated class loader.
+
 See the [English guide](docs/README.md) for repository setup, the complete DSL, and packaging rules.
 
 Licensed under the [Apache License 2.0](LICENSE).

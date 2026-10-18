@@ -27,6 +27,8 @@ klib {
 与 builtins 资源使用结构化转换。冲突的类定义、无法安全处理或不支持的 metadata 会导致
 构建失败，避免产生只转换了一半的 JAR；不承诺支持任意 compiler-plugin payload 或模块扩展。
 
+Java 字符串拼接的 `StringConcatFactory` 模板中，内嵌 JVM 对象描述符也会重定位，并保留动态参数标记；普通文本常量不作子串替换。最终 Nashorn 重定位包通过隔离加载器验证数组创建和动态重编译。
+
 支持范围以文档列出的 stdlib/reflect/协程组合和真实测试为准，不保证任意第三方反射库都可
 隔离。任意二进制资源、native code 或外部配置里的类名不能自动修复。不要通过插件共享
 API 暴露私有重定位 Kotlin 类型。Guard 的父加载器 API 仍受保护，跨边界 Kotlin 类型需与
