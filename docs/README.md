@@ -22,6 +22,7 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
+        maven("https://maven.kzheart.me/releases") { content { includeGroup("me.kzheart.klib") } }
         mavenCentral()
         maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
     }
@@ -60,7 +61,7 @@ dependencies {
 ```
 
 Do not manually add Klib `implementation(...)` dependencies when using `modules {}`. The plugin
-adds `me.kzheart.klib:klib-<module>:0.19.0` and its dependency closure from Maven Central.
+adds `me.kzheart.klib:klib-<module>:0.19.0` and its dependency closure from the Klib Maven repository.
 
 ## KlibGuard cloud products
 

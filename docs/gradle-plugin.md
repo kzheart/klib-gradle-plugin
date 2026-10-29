@@ -2,11 +2,14 @@
 
 插件默认应用 Kotlin/JVM 2.4.21。Kotlin 放在 `src/main/kotlin`，Java 放在
 `src/main/java`，支持混合编译，默认采用 Java 8 字节码与 Java 8 API 边界。不要再应用不同
-版本的 Kotlin 编译插件；项目仓库需声明 `mavenCentral()` 或对应可信镜像。
+版本的 Kotlin 编译插件；Klib 模块使用 `https://maven.kzheart.me/releases`，第三方依赖仍使用 `mavenCentral()`。
 
 ```kotlin
 plugins { id("me.kzheart.klib") version "0.8.1" }
-repositories { mavenCentral() }
+repositories {
+    maven("https://maven.kzheart.me/releases") { content { includeGroup("me.kzheart.klib") } }
+    mavenCentral()
+}
 klib {
     main("com.example.MyPlugin")
     targetPackage("com.example.myplugin")

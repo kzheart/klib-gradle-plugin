@@ -8,7 +8,10 @@ Gradle build integration with default Kotlin/JVM 2.4.21 and Java 8 output for Bu
 plugins {
     id("me.kzheart.klib") version "0.8.1"
 }
-repositories { mavenCentral() }
+repositories {
+    maven("https://maven.kzheart.me/releases") { content { includeGroup("me.kzheart.klib") } }
+    mavenCentral()
+}
 
 klib {
     main("com.example.plugin.ExamplePlugin")

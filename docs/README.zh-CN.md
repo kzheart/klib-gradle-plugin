@@ -21,6 +21,7 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
+        maven("https://maven.kzheart.me/releases") { content { includeGroup("me.kzheart.klib") } }
         mavenCentral()
         maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
     }
@@ -58,7 +59,7 @@ dependencies {
 }
 ```
 
-使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从 Maven Central 自动加入
+使用 `modules {}` 后不要手写 Klib `implementation(...)`。插件会从上述 Klib Maven 仓库自动加入
 `me.kzheart.klib:klib-<module>:0.19.0` 及其模块闭包。
 
 ## KlibGuard 云端商品

@@ -2,12 +2,15 @@
 
 The plugin applies Kotlin/JVM 2.4.21 automatically. Put Kotlin in `src/main/kotlin` and Java in
 `src/main/java`; mixed-source projects default to Java 8 bytecode and the Java 8 API baseline.
-Do not apply a second, differently versioned Kotlin compiler plugin. Add `mavenCentral()` to your
-project repositories (or an equivalent approved mirror).
+Do not apply a second, differently versioned Kotlin compiler plugin. Resolve Klib modules from
+`https://maven.kzheart.me/releases` and third-party dependencies from Maven Central.
 
 ```kotlin
 plugins { id("me.kzheart.klib") version "0.8.1" }
-repositories { mavenCentral() }
+repositories {
+    maven("https://maven.kzheart.me/releases") { content { includeGroup("me.kzheart.klib") } }
+    mavenCentral()
+}
 klib {
     main("com.example.MyPlugin")
     targetPackage("com.example.myplugin")
